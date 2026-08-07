@@ -1,10 +1,9 @@
 import React, { ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { HIT_SLOP, MIN_TOUCH, fonts, fontSizes, spacing, weights } from '../constants/theme';
+import { HIT_SLOP, MIN_TOUCH, PAGE_PAD, spacing } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { useHaptics } from '../hooks/useHaptics';
 import { Type } from './Type';
@@ -14,21 +13,18 @@ export interface NavBarProps {
   subtitle?: string;
   onBack?: () => void;
   backLabel?: string;
-  /** Rendered at the trailing edge; keep to one or two controls. */
   right?: ReactNode;
-  /** Extra chrome docked below the title, e.g. a search field. */
   below?: ReactNode;
-  /** Left-aligned brand/title layout used on main tabs. */
+  /** Left-aligned page title (main tabs). */
   align?: 'center' | 'start';
-  /** Large serif title (Trovelo / Settings). */
+  /** Large page title. */
   large?: boolean;
-  /** Hide the bottom hairline. */
   borderless?: boolean;
 }
 
 /**
- * Editorial toolbar: cream bar, serif titles when large, plain text actions.
- * No logos — type alone carries the brand.
+ * Minimal toolbar. Same horizontal inset as page content so titles line up
+ * with everything below.
  */
 export function NavBar({
   title,
@@ -39,61 +35,47 @@ export function NavBar({
   below,
   align = 'center',
   large = false,
-  borderless = false,
+  borderless = true,
 }: NavBarProps) {
   const { palette } = useTheme();
   const insets = useSafeAreaInsets();
-  const ink = palette.ink;
   const start = align === 'start';
 
   return (
-    <View style={styles.root}>
-      <LinearGradient
-        colors={palette.chromeGradient.colors}
-        locations={palette.chromeGradient.locations}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
-
+    <View style={[styles.root, { backgroundColor: palette.backdrop }]}>
       <View style={{ height: insets.top }} />
 
       {start ? (
-        <View style={[styles.brandBar, large && styles.brandBarLarge]}>
-          <View style={styles.brandTitleBlock} accessibilityRole="header">
-            <Type
-              role={large ? 'display' : 'title'}
-              color={ink}
-              numberOfLines={1}
-              style={large ? styles.brandTitle : undefined}
-            >
+        <View style={styles.pageHeader}>
+          <View style={styles.pageHeaderText} accessibilityRole="header">
+            <Type role={large ? 'display' : 'title'} numberOfLines={1}>
               {title}
             </Type>
             {subtitle ? (
-              <Type role="caption" color={palette.inkFaint} numberOfLines={1} style={styles.brandSubtitle}>
+              <Type role="caption" color={palette.inkFaint} numberOfLines={1} style={styles.subtitle}>
                 {subtitle}
               </Type>
             ) : null}
           </View>
-          {right ? <View style={styles.brandRight}>{right}</View> : null}
+          {right ? <View style={styles.pageHeaderRight}>{right}</View> : null}
         </View>
       ) : (
         <View style={styles.bar}>
           <View style={styles.side}>
-            {onBack ? <BackButton label={backLabel} onPress={onBack} ink={ink} /> : null}
+            {onBack ? <BackButton label={backLabel} onPress={onBack} /> : null}
           </View>
-
           <View style={styles.titleWrap} accessibilityRole="header">
-            <Type role="heading" color={ink} align="center" numberOfLines={1}>
-              {title}
-            </Type>
+            {title ? (
+              <Type role="heading" align="center" numberOfLines={1}>
+                {title}
+              </Type>
+            ) : null}
             {subtitle ? (
-              <Type role="caption" color={palette.inkFaint} align="center" numberOfLines={1} style={styles.subtitle}>
+              <Type role="caption" color={palette.inkFaint} align="center" numberOfLines={1}>
                 {subtitle}
               </Type>
             ) : null}
           </View>
-
           <View style={[styles.side, styles.sideRight]}>{right}</View>
         </View>
       )}
@@ -101,13 +83,14 @@ export function NavBar({
       {below ? <View style={styles.below}>{below}</View> : null}
 
       {!borderless ? (
-        <View pointerEvents="none" style={[styles.bottomRule, { backgroundColor: palette.chromeBorder }]} />
+        <View style={[styles.rule, { backgroundColor: palette.edge }]} />
       ) : null}
     </View>
   );
 }
 
-function BackButton({ label, onPress, ink }: { label: string; onPress: () => void; ink: string }) {
+function BackButton({ label, onPress }: { label: string; onPress: () => void }) {
+  const { palette } = useTheme();
   const haptics = useHaptics();
   return (
     <Pressable
@@ -118,16 +101,15 @@ function BackButton({ label, onPress, ink }: { label: string; onPress: () => voi
       hitSlop={HIT_SLOP}
       accessibilityRole="button"
       accessibilityLabel={label}
-      style={({ pressed }) => [styles.back, { opacity: pressed ? 0.6 : 1 }]}
+      style={({ pressed }) => [styles.back, { opacity: pressed ? 0.5 : 1 }]}
     >
-      <Type role="body" color={ink} numberOfLines={1} style={styles.backLabel}>
+      <Type role="body" color={palette.ink}>
         {label}
       </Type>
     </Pressable>
   );
 }
 
-/** A toolbar text action (Save, Ask, etc.) — preferred over icons in the editorial UI. */
 export function NavTextAction({
   label,
   onPress,
@@ -153,21 +135,15 @@ export function NavTextAction({
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ disabled }}
-      style={({ pressed }) => [styles.textAction, { opacity: disabled ? 0.35 : pressed ? 0.6 : 1 }]}
+      style={({ pressed }) => [styles.textAction, { opacity: disabled ? 0.3 : pressed ? 0.5 : 1 }]}
     >
-      <Type
-        role="body"
-        color={accent ? palette.accent : palette.ink}
-        numberOfLines={1}
-        style={styles.textActionLabel}
-      >
+      <Type role="bodyStrong" color={accent ? palette.accent : palette.ink}>
         {label}
       </Type>
     </Pressable>
   );
 }
 
-/** A toolbar-tinted icon action for {@link NavBarProps.right}. */
 export function NavAction({
   icon,
   label,
@@ -193,7 +169,7 @@ export function NavAction({
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ disabled }}
-      style={({ pressed }) => [styles.action, { opacity: disabled ? 0.4 : pressed ? 0.6 : 1 }]}
+      style={({ pressed }) => [styles.iconAction, { opacity: disabled ? 0.3 : pressed ? 0.5 : 1 }]}
     >
       <Ionicons name={icon} size={22} color={palette.ink} />
     </Pressable>
@@ -202,49 +178,39 @@ export function NavAction({
 
 const styles = StyleSheet.create({
   root: {
-    overflow: 'hidden',
     zIndex: 10,
+  },
+  pageHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    paddingHorizontal: PAGE_PAD,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
+    gap: spacing.md,
+    minHeight: 64,
+  },
+  pageHeaderText: {
+    flex: 1,
+    gap: 4,
+  },
+  pageHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingBottom: 2,
+  },
+  subtitle: {
+    marginTop: 2,
   },
   bar: {
     flexDirection: 'row',
     alignItems: 'center',
     minHeight: 52,
-    paddingHorizontal: spacing.lg,
-  },
-  brandBar: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
-    gap: spacing.md,
-  },
-  brandBarLarge: {
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.md,
-  },
-  brandTitleBlock: {
-    flex: 1,
-    gap: 4,
-  },
-  brandTitle: {
-    fontFamily: fonts.display,
-    fontSize: fontSizes.xxl,
-    fontWeight: weights.bold,
-    lineHeight: 42,
-  },
-  brandSubtitle: {
-    fontSize: fontSizes.sm,
-  },
-  brandRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingTop: spacing.sm,
+    paddingHorizontal: PAGE_PAD,
   },
   side: {
-    minWidth: 72,
+    minWidth: 64,
     flexDirection: 'row',
     alignItems: 'center',
   },
@@ -255,47 +221,28 @@ const styles = StyleSheet.create({
   titleWrap: {
     flex: 1,
     alignItems: 'center',
-    paddingHorizontal: spacing.xs,
-  },
-  subtitle: {
-    opacity: 0.75,
+    paddingHorizontal: spacing.sm,
   },
   back: {
-    flexDirection: 'row',
-    alignItems: 'center',
     minHeight: MIN_TOUCH,
-    marginLeft: -2,
-  },
-  backLabel: {
-    fontFamily: fonts.body,
-    fontSize: fontSizes.md,
+    justifyContent: 'center',
   },
   textAction: {
     minHeight: MIN_TOUCH,
-    alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.xs,
   },
-  textActionLabel: {
-    fontFamily: fonts.bodySemibold,
-    fontSize: fontSizes.md,
-    fontWeight: weights.semibold,
-  },
-  action: {
-    minWidth: MIN_TOUCH,
-    minHeight: MIN_TOUCH,
+  iconAction: {
+    width: MIN_TOUCH,
+    height: MIN_TOUCH,
     alignItems: 'center',
     justifyContent: 'center',
   },
   below: {
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: PAGE_PAD,
     paddingBottom: spacing.md,
   },
-  bottomRule: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+  rule: {
     height: StyleSheet.hairlineWidth,
   },
 });

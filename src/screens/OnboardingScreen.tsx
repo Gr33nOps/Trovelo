@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
-import { spacing, withAlpha } from '../constants/theme';
+import { PAGE_PAD, spacing, withAlpha } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { RootStackParamList } from '../navigation';
 import { Button } from '../ui/Button';
@@ -12,27 +12,22 @@ import { Type } from '../ui/Type';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Onboarding'>;
 
-interface Page {
-  title: string;
-  body: string;
-}
-
-const PAGES: Page[] = [
+const PAGES = [
   {
     title: 'One place for everything',
-    body: 'Ideas, notes, tasks and journal entries all go in the same box. No folders required, no tidying up.',
+    body: 'Ideas, notes, tasks and journal entries live in the same box.',
   },
   {
     title: 'Rediscover what you saved',
-    body: 'Tap Surprise Me and something comes back when you least expect it. Or just search for it directly.',
+    body: 'Tap Surprise Me and something comes back when you least expect it.',
   },
   {
-    title: 'A quiet helper, on your phone',
-    body: 'An optional assistant can tidy your wording, suggest tags or answer questions about what you have saved. On this phone by default, nothing uploaded; you can connect a cloud provider instead if you choose to.',
+    title: 'A quiet helper',
+    body: 'An optional assistant can tidy wording and suggest tags — on this phone by default.',
   },
   {
     title: 'Yours alone',
-    body: 'No account, no server. Everything stays on this phone by default. A backup only leaves when you share it, and can be locked with a password.',
+    body: 'No account, no server. Everything stays on this phone unless you share a backup.',
   },
 ];
 
@@ -60,7 +55,7 @@ export default function OnboardingScreen({ navigation }: Props) {
 
   return (
     <Backdrop>
-      <View style={[styles.root, { paddingTop: insets.top }]}>
+      <View style={[styles.root, { paddingTop: insets.top + spacing.xxl }]}>
         <ScrollView
           ref={scroller}
           horizontal
@@ -73,34 +68,29 @@ export default function OnboardingScreen({ navigation }: Props) {
         >
           {PAGES.map((item) => (
             <View key={item.title} style={[styles.page, { width }]}>
-              <View style={styles.card}>
-                <Type role="display" align="center">
-                  {item.title}
-                </Type>
-                <Type role="body" align="center" color={palette.inkSoft} style={styles.body}>
-                  {item.body}
-                </Type>
-              </View>
+              <Type role="display">{item.title}</Type>
+              <Type role="body" color={palette.inkSoft} style={styles.body}>
+                {item.body}
+              </Type>
             </View>
           ))}
         </ScrollView>
 
-        <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.lg }]}>
-          <View style={styles.dots} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.xl }]}>
+          <View style={styles.dots}>
             {PAGES.map((item, index) => (
               <View
                 key={item.title}
                 style={[
                   styles.dot,
                   {
-                    backgroundColor: index === page ? palette.accent : withAlpha(palette.ink, 0.2),
-                    width: index === page ? 20 : 7,
+                    backgroundColor: index === page ? palette.ink : withAlpha(palette.ink, 0.18),
+                    width: index === page ? 18 : 6,
                   },
                 ]}
               />
             ))}
           </View>
-
           <Button
             label={page >= PAGES.length - 1 ? "Let's go" : 'Next'}
             variant="primary"
@@ -109,12 +99,6 @@ export default function OnboardingScreen({ navigation }: Props) {
             haptic="medium"
             onPress={next}
           />
-          {/*
-            Always rendered, just made invisible on the last page, so the
-            footer keeps a constant height. Conditionally omitting this button
-            made the primary button above it visibly jump down a row on the
-            final page.
-          */}
           <Button
             label="Skip"
             variant="plain"
@@ -138,19 +122,15 @@ const styles = StyleSheet.create({
   },
   page: {
     justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
-  },
-  card: {
-    padding: spacing.xl,
+    paddingHorizontal: PAGE_PAD,
     gap: spacing.lg,
-    alignItems: 'center',
   },
   body: {
-    lineHeight: 28,
-    paddingHorizontal: spacing.md,
+    lineHeight: 26,
+    maxWidth: 320,
   },
   footer: {
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: PAGE_PAD,
     paddingTop: spacing.lg,
     gap: spacing.md,
     alignItems: 'center',
@@ -162,10 +142,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: spacing.xs,
+    marginBottom: spacing.sm,
   },
   dot: {
-    height: 7,
-    borderRadius: 4,
+    height: 6,
+    borderRadius: 3,
   },
 });

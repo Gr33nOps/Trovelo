@@ -2,16 +2,16 @@
   "expo": {
     "name": "Trovelo",
     "slug": "trovelo",
-    "version": "1.12.0",
+    "version": "1.13.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-    "backgroundColor": "#F7F5F0",
-    "primaryColor": "#A07A28",
+    "backgroundColor": "#FAFAF8",
+    "primaryColor": "#8B6914",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.trovelo.app",
-      "buildNumber": "13",
+      "buildNumber": "14",
       "userInterfaceStyle": "automatic",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Trovelo uses the microphone so you can dictate ideas instead of typing. Speech is turned into text on this device and never leaves it.",
@@ -20,7 +20,7 @@
     },
     "android": {
       "package": "com.trovelo.app",
-      "versionCode": 13,
+      "versionCode": 14,
       "permissions": [
         "RECORD_AUDIO"
       ],
@@ -30,7 +30,7 @@
       ],
       "userInterfaceStyle": "automatic",
       "adaptiveIcon": {
-        "backgroundColor": "#6B5334",
+        "backgroundColor": "#FAFAF8",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -43,12 +43,12 @@
         "expo-splash-screen",
         {
           "image": "./assets/splash-icon.png",
-          "imageWidth": 240,
+          "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#F7F5F0",
+          "backgroundColor": "#FAFAF8",
           "dark": {
-            "image": "./assets/splash-icon.png",
-            "backgroundColor": "#1A1814"
+            "image": "./assets/splash-icon-dark.png",
+            "backgroundColor": "#121211"
           }
         }
       ],

@@ -5,7 +5,7 @@ import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 
 import { KIND_CONFIG, KIND_ORDER } from '../constants/kinds';
 import { STATUS_CONFIG, STATUS_ORDER } from '../constants/status';
-import { radius as radii, spacing, withAlpha } from '../constants/theme';
+import { PAGE_PAD, radius as radii, spacing, withAlpha } from '../constants/theme';
 import { useEntries } from '../context/EntriesContext';
 import { useTheme } from '../context/ThemeContext';
 import { MainTabScreenProps } from '../navigation';
@@ -320,8 +320,9 @@ function Insight({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text: s
 
 const styles = StyleSheet.create({
   content: {
-    padding: spacing.lg,
-    gap: spacing.lg,
+    paddingHorizontal: PAGE_PAD,
+    paddingTop: spacing.sm,
+    gap: spacing.xl,
   },
   grid: {
     flexDirection: 'row',

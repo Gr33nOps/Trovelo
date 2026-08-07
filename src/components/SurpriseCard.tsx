@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { Animated, Easing, ScrollView, StyleSheet, View } from 'react-native';
 
 import { KIND_CONFIG } from '../constants/kinds';
@@ -16,21 +16,18 @@ interface Props {
   onTagPress?: (tag: string) => void;
 }
 
-/**
- * Editorial surprise reveal: kind label, large serif body, date underneath.
- * Matches the calm reading layout from the reference — no floating card chrome.
- */
+/** Calm surprise reading surface — kind, body, date. Nothing else. */
 export function SurpriseCard({ entry, folderName, onToggleFavorite }: Props) {
   const { palette } = useTheme();
   const reveal = useRef(new Animated.Value(0)).current;
   const kind = entry.kind ?? 'idea';
-  const body = entry.title ? `${entry.title} — ${entry.text}` : entry.text;
+  const body = entry.title?.trim() ? `${entry.title.trim()}\n\n${entry.text}` : entry.text;
 
   useEffect(() => {
     reveal.setValue(0);
     Animated.timing(reveal, {
       toValue: 1,
-      duration: 420,
+      duration: 360,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
@@ -40,12 +37,12 @@ export function SurpriseCard({ entry, folderName, onToggleFavorite }: Props) {
     <Animated.View
       style={{
         opacity: reveal,
-        transform: [{ translateY: reveal.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }],
+        transform: [{ translateY: reveal.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
       }}
     >
-      <View style={styles.card}>
-        <View style={styles.headerRow}>
-          <Type role="label" color={palette.inkFaint} style={styles.kind}>
+      <View style={styles.wrap}>
+        <View style={styles.top}>
+          <Type role="label" color={palette.inkFaint}>
             {KIND_CONFIG[kind].label}
           </Type>
           <IconButton
@@ -58,18 +55,13 @@ export function SurpriseCard({ entry, folderName, onToggleFavorite }: Props) {
           />
         </View>
 
-        <ScrollView
-          style={styles.bodyScroll}
-          contentContainerStyle={styles.bodyContent}
-          showsVerticalScrollIndicator={false}
-          nestedScrollEnabled
-        >
+        <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} nestedScrollEnabled>
           <Type role="title" style={styles.body}>
             {body}
           </Type>
         </ScrollView>
 
-        <Type role="caption" color={palette.inkFaint} style={styles.date}>
+        <Type role="caption" color={palette.inkFaint}>
           {formatDate(entry.createdAt)}
           {folderName ? ` · ${folderName}` : ''}
         </Type>
@@ -79,30 +71,22 @@ export function SurpriseCard({ entry, folderName, onToggleFavorite }: Props) {
 }
 
 const styles = StyleSheet.create({
-  card: {
-    gap: spacing.lg,
+  wrap: {
+    gap: spacing.xl,
   },
-  headerRow: {
+  top: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  kind: {
-    letterSpacing: 1.6,
-  },
-  bodyScroll: {
-    maxHeight: 340,
-  },
-  bodyContent: {
-    paddingRight: spacing.xs,
+  scroll: {
+    maxHeight: 360,
   },
   body: {
     fontFamily: fonts.displayRegular,
     fontWeight: weights.regular,
     fontSize: fontSizes.xl,
-    lineHeight: 38,
-  },
-  date: {
-    fontSize: fontSizes.sm,
+    lineHeight: 36,
+    letterSpacing: -0.3,
   },
 });

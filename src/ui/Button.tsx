@@ -1,4 +1,4 @@
-import React, { ReactNode, useCallback, useRef } from 'react';
+import React, { useCallback, useRef } from 'react';
 import {
   AccessibilityProps,
   ActivityIndicator,
@@ -9,14 +9,13 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 
 import {
-  Gradient,
   MIN_TOUCH,
   Palette,
   contrastingInk,
   fontSizes,
+  fonts,
   radius as radii,
   weights,
 } from '../constants/theme';
@@ -33,44 +32,23 @@ export interface ButtonProps extends Pick<AccessibilityProps, 'accessibilityHint
   onLongPress?: () => void;
   variant?: ButtonVariant;
   size?: ButtonSize;
-  icon?: ReactNode;
-  iconRight?: ReactNode;
+  icon?: React.ReactNode;
+  iconRight?: React.ReactNode;
   fullWidth?: boolean;
   disabled?: boolean;
   loading?: boolean;
   haptic?: 'light' | 'medium' | 'success' | 'warning' | false;
-  /** Overrides the variant's fill. Used for status-coloured actions. */
   tint?: string;
   style?: StyleProp<ViewStyle>;
   accessibilityLabel?: string;
   testID?: string;
 }
 
-const HEIGHTS: Record<ButtonSize, number> = { sm: 36, md: 48, lg: 56 };
-const FONT: Record<ButtonSize, number> = { sm: fontSizes.sm, md: fontSizes.md, lg: fontSizes.lg };
-
-/** A flat fill: both gradient stops are the tint itself. */
-function tintGradient(tint: string): Gradient {
-  return { colors: [tint, tint] };
-}
-
-function shiftChannel(hex: string, amount: number): string {
-  const value = hex.replace('#', '');
-  const full = value.length === 3 ? value.replace(/./g, (c) => c + c) : value;
-  const parts = [0, 2, 4].map((i) => {
-    const channel = parseInt(full.slice(i, i + 2), 16);
-    const next = amount >= 0 ? channel + (255 - channel) * amount : channel * (1 + amount);
-    return Math.max(0, Math.min(255, Math.round(next)))
-      .toString(16)
-      .padStart(2, '0');
-  });
-  return `#${parts.join('')}`;
-}
-
-const darken = (hex: string, amount: number) => shiftChannel(hex, -amount);
+const HEIGHTS: Record<ButtonSize, number> = { sm: 36, md: 48, lg: 52 };
+const FONT: Record<ButtonSize, number> = { sm: fontSizes.sm, md: fontSizes.md, lg: fontSizes.md };
 
 interface Skin {
-  gradient: Gradient;
+  fill: string;
   ink: string;
   border: string;
   bordered: boolean;
@@ -78,54 +56,22 @@ interface Skin {
 
 function skinFor(variant: ButtonVariant, palette: Palette, tint?: string): Skin {
   if (tint) {
-    return { gradient: tintGradient(tint), ink: contrastingInk(tint), border: darken(tint, 0.35), bordered: true };
+    return { fill: tint, ink: contrastingInk(tint), border: tint, bordered: true };
   }
   switch (variant) {
     case 'primary':
-      return {
-        gradient: palette.accentGradient,
-        ink: palette.accentInk,
-        border: palette.accentEdge,
-        bordered: true,
-      };
+      return { fill: palette.accent, ink: palette.accentInk, border: palette.accent, bordered: false };
     case 'danger':
-      // Was a hardcoded near-white, which is nearly unreadable against the
-      // dark-mode danger colour (a light salmon, luminance ~0.35). Deriving it
-      // the same way `tint` does keeps both modes correct.
-      return {
-        gradient: palette.dangerGradient,
-        ink: contrastingInk(palette.danger),
-        border: palette.dangerEdge,
-        bordered: true,
-      };
+      return { fill: palette.danger, ink: contrastingInk(palette.danger), border: palette.danger, bordered: false };
     case 'secondary':
-      return {
-        gradient: palette.panelGradient,
-        ink: palette.ink,
-        border: palette.edgeStrong,
-        bordered: true,
-      };
+      return { fill: palette.well, ink: palette.ink, border: palette.edge, bordered: true };
     case 'outline':
-      return {
-        gradient: { colors: ['transparent', 'transparent'] },
-        ink: palette.accent,
-        border: palette.accent,
-        bordered: true,
-      };
+      return { fill: 'transparent', ink: palette.accent, border: palette.accent, bordered: true };
     case 'plain':
-      return {
-        gradient: { colors: ['transparent', 'transparent'] },
-        ink: palette.accent,
-        border: 'transparent',
-        bordered: false,
-      };
+      return { fill: 'transparent', ink: palette.accent, border: 'transparent', bordered: false };
   }
 }
 
-/**
- * A flat button: solid fill, a thin rim, and a small travel-and-darken
- * response when held down. No gradient, gloss or shadow.
- */
 export function Button({
   label,
   onPress,
@@ -147,7 +93,6 @@ export function Button({
   const { palette } = useTheme();
   const haptics = useHaptics();
   const travel = useRef(new Animated.Value(0)).current;
-
   const inert = disabled || loading;
   const skin = skinFor(variant, palette, disabled ? undefined : tint);
   const height = HEIGHTS[size];
@@ -163,32 +108,22 @@ export function Button({
     [travel],
   );
 
-  const handlePress = () => {
-    if (inert) return;
-    if (haptic) haptics[haptic]();
-    onPress();
-  };
-
-  // Disabled state is conveyed by the 0.55 opacity below alone. Also
-  // swapping the label to `inkFaint` stacked two dimming effects on the same
-  // pixels; against the near-black dark-mode backdrop that combination
-  // dropped well under 4.5:1 contrast, reading as barely-there grey text
-  // rather than a legibly "disabled" label.
-  const ink = skin.ink;
-
   return (
     <Animated.View
       style={[
         fullWidth ? styles.fullWidth : null,
-        variant !== 'plain'
-          ? { backgroundColor: skin.gradient.colors[1], borderRadius: radii.md }
-          : null,
-        { transform: [{ translateY: travel.interpolate({ inputRange: [0, 1], outputRange: [0, 1] }) }] },
+        {
+          transform: [{ scale: travel.interpolate({ inputRange: [0, 1], outputRange: [1, 0.98] }) }],
+        },
         style,
       ]}
     >
       <Pressable
-        onPress={handlePress}
+        onPress={() => {
+          if (inert) return;
+          if (haptic) haptics[haptic]();
+          onPress();
+        }}
         onLongPress={inert ? undefined : onLongPress}
         onPressIn={() => !inert && animate(1)}
         onPressOut={() => animate(0)}
@@ -202,52 +137,27 @@ export function Button({
           styles.base,
           {
             height,
-            borderRadius: radii.md,
-            borderWidth: skin.bordered ? (variant === 'outline' ? 1.5 : StyleSheet.hairlineWidth) : 0,
+            borderRadius: radii.sm,
+            backgroundColor: skin.fill,
+            borderWidth: skin.bordered ? 1.5 : 0,
             borderColor: disabled ? palette.edge : skin.border,
-            opacity: disabled ? 0.55 : 1,
+            opacity: disabled ? 0.45 : 1,
+            minWidth: size === 'sm' ? undefined : MIN_TOUCH,
           },
         ]}
       >
-        <LinearGradient
-          colors={skin.gradient.colors}
-          locations={skin.gradient.locations}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
-          style={[StyleSheet.absoluteFill, { borderRadius: radii.md }]}
-        />
-        {/* Held-down state: the whole face darkens slightly. */}
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            StyleSheet.absoluteFill,
-            {
-              borderRadius: radii.md,
-              backgroundColor: '#000',
-              opacity: travel.interpolate({ inputRange: [0, 1], outputRange: [0, 0.18] }),
-            },
-          ]}
-        />
-
-        {/*
-          The spinner takes the icon's place rather than replacing the whole
-          content. Swapping the label out left a running button blank, which
-          read as broken and threw away the label callers set for exactly this
-          state (AiPanel's "Rewriting…", for one).
-        */}
         <View style={styles.content}>
-          {loading ? <ActivityIndicator color={ink} size="small" /> : icon}
+          {loading ? <ActivityIndicator color={skin.ink} size="small" /> : icon}
           <Type
             role="body"
-            color={ink}
-            pressed={variant !== 'plain'}
-            onAccent={variant === 'primary' || variant === 'danger' || !!tint}
+            color={skin.ink}
             numberOfLines={1}
             style={{
+              fontFamily: fonts.bodySemibold,
               fontSize: FONT[size],
               fontWeight: weights.semibold,
               lineHeight: undefined,
-              letterSpacing: variant === 'outline' ? 1.5 : undefined,
+              letterSpacing: variant === 'outline' ? 1.2 : 0,
             }}
           >
             {label}
@@ -267,7 +177,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     overflow: 'hidden',
   },
   content: {

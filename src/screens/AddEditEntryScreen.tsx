@@ -17,7 +17,7 @@ import { DatePicker } from '../components/DatePicker';
 import { StatusPicker } from '../components/StatusPicker';
 import { TagInput } from '../components/TagInput';
 import { KIND_CONFIG, KIND_ORDER } from '../constants/kinds';
-import { radius as radii, spacing, withAlpha } from '../constants/theme';
+import { radius as radii, PAGE_PAD, spacing, withAlpha } from '../constants/theme';
 import { useEntries } from '../context/EntriesContext';
 import { useSettings } from '../context/SettingsContext';
 import { useTheme } from '../context/ThemeContext';
@@ -418,9 +418,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: PAGE_PAD,
     paddingTop: spacing.md,
-    gap: spacing.lg,
+    gap: spacing.xl,
   },
   kindTabs: {
     flexDirection: 'row',
@@ -431,15 +431,16 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   bodyField: {
-    marginTop: -spacing.sm,
+    marginTop: -spacing.md,
   },
   detailBlock: {
     gap: spacing.sm,
   },
   textArea: {
-    minHeight: 220,
+    minHeight: 240,
     fontSize: 19,
     lineHeight: 30,
+    paddingHorizontal: 0,
   },
   dictationRow: {
     flexDirection: 'row',

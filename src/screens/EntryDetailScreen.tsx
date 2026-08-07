@@ -8,7 +8,7 @@ import { AiPanel } from '../components/AiPanel';
 import { StatusBadge } from '../components/StatusBadge';
 import { StatusPicker } from '../components/StatusPicker';
 import { KIND_CONFIG } from '../constants/kinds';
-import { radius as radii, spacing, withAlpha } from '../constants/theme';
+import { PAGE_PAD, radius as radii, spacing, withAlpha } from '../constants/theme';
 import { useEntries } from '../context/EntriesContext';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
@@ -412,17 +412,18 @@ export default function EntryDetailScreen({ navigation, route }: Props) {
 
 const styles = StyleSheet.create({
   content: {
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: PAGE_PAD,
     paddingTop: spacing.md,
-    gap: spacing.lg,
+    gap: spacing.xl,
   },
   card: {
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm,
     gap: spacing.md,
   },
   body: {
     fontWeight: '400',
-    lineHeight: 36,
+    lineHeight: 34,
+    letterSpacing: -0.2,
   },
   tags: {
     flexDirection: 'row',

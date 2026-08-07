@@ -34,7 +34,7 @@ export function Chip({ label, active = false, onPress, color, icon, count, acces
   const { palette } = useTheme();
   const haptics = useHaptics();
   const fill = color ?? palette.accent;
-  const ink = active ? contrastingInk(fill) : palette.inkSoft;
+  const ink = active ? palette.accent : palette.inkSoft;
 
   return (
     <Pressable
@@ -50,15 +50,15 @@ export function Chip({ label, active = false, onPress, color, icon, count, acces
       style={({ pressed }) => [
         styles.chip,
         {
-          borderRadius: radii.pill,
-          borderColor: active ? withAlpha(fill, 0.9) : palette.edge,
-          backgroundColor: active ? fill : palette.panel,
-          opacity: pressed ? 0.75 : 1,
+          borderRadius: radii.sm,
+          borderColor: active ? withAlpha(fill, 0.5) : palette.edge,
+          backgroundColor: active ? withAlpha(fill, 0.12) : 'transparent',
+          opacity: pressed ? 0.7 : 1,
         },
       ]}
     >
       {icon}
-      <Type role="caption" color={ink} pressed={active} onAccent={active} style={styles.chipLabel}>
+      <Type role="caption" color={ink} style={styles.chipLabel}>
         {label}
       </Type>
       {count !== undefined ? (
@@ -70,7 +70,7 @@ export function Chip({ label, active = false, onPress, color, icon, count, acces
   );
 }
 
-/** Underline text tab used for kind filters (All · idea · note · …). */
+/** Underline text tab — equal height, aligned baseline, consistent gap. */
 export function TextTab({
   label,
   active = false,
@@ -89,25 +89,20 @@ export function TextTab({
         haptics.light();
         onPress();
       }}
-      hitSlop={HIT_SLOP}
+      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
       accessibilityRole="tab"
       accessibilityState={{ selected: active }}
       accessibilityLabel={label}
-      style={({ pressed }) => [styles.textTab, { opacity: pressed ? 0.65 : 1 }]}
+      style={({ pressed }) => [styles.textTab, { opacity: pressed ? 0.55 : 1 }]}
     >
       <Type
         role="body"
-        color={active ? palette.ink : palette.inkSoft}
+        color={active ? palette.ink : palette.inkFaint}
         style={[styles.textTabLabel, active && styles.textTabLabelActive]}
       >
         {label}
       </Type>
-      <View
-        style={[
-          styles.textTabRule,
-          { backgroundColor: active ? palette.ink : 'transparent' },
-        ]}
-      />
+      <View style={[styles.textTabRule, { backgroundColor: active ? palette.ink : 'transparent' }]} />
     </Pressable>
   );
 }
@@ -311,34 +306,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    minHeight: 32,
+    minHeight: 34,
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
   },
   chipLabel: {
-    fontWeight: '600',
+    fontWeight: '500',
+    fontSize: 14,
   },
   chipCount: {
     fontVariant: ['tabular-nums'],
   },
   textTab: {
-    paddingVertical: spacing.sm,
-    paddingRight: spacing.lg,
-    minHeight: MIN_TOUCH,
-    justifyContent: 'center',
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+    marginRight: spacing.xl,
+    justifyContent: 'flex-end',
   },
   textTabLabel: {
-    fontSize: 17,
+    fontSize: 16,
+    lineHeight: 22,
   },
   textTabLabelActive: {
     fontWeight: '600',
   },
   textTabRule: {
-    marginTop: 6,
+    marginTop: 8,
     height: 2,
-    alignSelf: 'stretch',
+    borderRadius: 1,
   },
   segment: {
     padding: 3,

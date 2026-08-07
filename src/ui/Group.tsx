@@ -2,12 +2,11 @@ import React, { Children, Fragment, ReactNode, isValidElement } from 'react';
 import { Pressable, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
-import { MIN_TOUCH, radius as radii, spacing } from '../constants/theme';
+import { MIN_TOUCH, spacing } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
-import { Panel, Rule } from './Surface';
+import { Rule } from './Surface';
 import { Type } from './Type';
 
-/** Small muted heading above a group, with an optional hint and action. */
 export function SectionHeader({
   title,
   hint,
@@ -22,7 +21,7 @@ export function SectionHeader({
   return (
     <View style={[styles.sectionHeader, style]}>
       <View style={styles.sectionHeaderMain}>
-        <Type role="label" pressed accessibilityRole="header">
+        <Type role="label" accessibilityRole="header">
           {title}
         </Type>
         {hint ? (
@@ -36,15 +35,10 @@ export function SectionHeader({
   );
 }
 
-/**
- * A grouped list: one card, hairline rules between children, rounded ends.
- * Children are separated automatically so callers never hand-place dividers.
- */
-/** A grouped list with soft hairlines between children. */
+/** Flat grouped list — hairlines only, no card chrome. */
 export function Group({
   children,
   style,
-  inset = spacing.lg,
 }: {
   children: ReactNode;
   style?: StyleProp<ViewStyle>;
@@ -52,27 +46,25 @@ export function Group({
 }) {
   const items = Children.toArray(children).filter(isValidElement);
   return (
-    <Panel style={style} borderRadius={radii.lg} borderColor="transparent">
+    <View style={style}>
       {items.map((child, index) => (
         <Fragment key={child.key ?? index}>
-          {index > 0 ? <Rule inset={inset} /> : null}
+          {index > 0 ? <Rule /> : null}
           {child}
         </Fragment>
       ))}
-    </Panel>
+    </View>
   );
 }
 
 export interface RowProps {
   title: string;
   subtitle?: string;
-  /** Right-hand value text, e.g. a count or current setting. */
   value?: string;
   left?: ReactNode;
   right?: ReactNode;
   onPress?: () => void;
   onLongPress?: () => void;
-  /** Shows a chevron; defaults to true when the row is pressable. */
   chevron?: boolean;
   destructive?: boolean;
   disabled?: boolean;
@@ -80,7 +72,6 @@ export interface RowProps {
   testID?: string;
 }
 
-/** A single line in a {@link Group}. Meets the 44pt minimum touch target. */
 export function Row({
   title,
   subtitle,
@@ -104,11 +95,11 @@ export function Row({
     <View style={styles.row}>
       {left ? <View style={styles.rowLeft}>{left}</View> : null}
       <View style={styles.rowMain}>
-        <Type role="bodyStrong" color={disabled ? palette.inkFaint : titleColor} pressed numberOfLines={2}>
+        <Type role="bodyStrong" color={disabled ? palette.inkFaint : titleColor} numberOfLines={2}>
           {title}
         </Type>
         {subtitle ? (
-          <Type role="caption" numberOfLines={3}>
+          <Type role="caption" numberOfLines={3} color={palette.inkSoft}>
             {subtitle}
           </Type>
         ) : null}
@@ -119,9 +110,7 @@ export function Row({
         </Type>
       ) : null}
       {right}
-      {showChevron ? (
-        <Ionicons name="chevron-forward" size={16} color={palette.inkFaint} style={styles.chevron} />
-      ) : null}
+      {showChevron ? <Ionicons name="chevron-forward" size={16} color={palette.inkFaint} /> : null}
     </View>
   );
 
@@ -143,7 +132,7 @@ export function Row({
       accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled }}
       android_ripple={{ color: palette.bevelBottom }}
-      style={({ pressed }) => (pressed ? { backgroundColor: palette.bevelBottom } : null)}
+      style={({ pressed }) => (pressed ? { opacity: 0.55 } : null)}
     >
       {body}
     </Pressable>
@@ -156,26 +145,24 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'space-between',
     gap: spacing.md,
-    paddingHorizontal: spacing.xs,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
   },
   sectionHeaderMain: {
     flex: 1,
-    gap: 2,
+    gap: 4,
   },
   sectionHint: {
-    lineHeight: 18,
+    lineHeight: 20,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    minHeight: MIN_TOUCH,
-    paddingHorizontal: spacing.lg,
+    minHeight: MIN_TOUCH + 8,
     paddingVertical: spacing.md,
   },
   rowLeft: {
-    width: 32,
+    width: 28,
     alignItems: 'center',
   },
   rowMain: {
@@ -184,8 +171,5 @@ const styles = StyleSheet.create({
   },
   rowValue: {
     maxWidth: '40%',
-  },
-  chevron: {
-    marginLeft: -4,
   },
 });

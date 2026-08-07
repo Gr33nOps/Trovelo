@@ -2,14 +2,10 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View } from 'react-native';
 import { DefaultTheme, NavigationContainer, Theme as NavTheme } from '@react-navigation/native';
 import {
-  PlayfairDisplay_400Regular,
-  PlayfairDisplay_700Bold,
-  useFonts,
-} from '@expo-google-fonts/playfair-display';
-import {
   SourceSans3_400Regular,
   SourceSans3_500Medium,
   SourceSans3_600SemiBold,
+  useFonts,
 } from '@expo-google-fonts/source-sans-3';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
@@ -37,8 +33,6 @@ export default function App() {
   // before any provider reads, so the rename is invisible to existing users.
   const [keysMigrated, setKeysMigrated] = useState(false);
   const [fontsLoaded] = useFonts({
-    PlayfairDisplay_400Regular,
-    PlayfairDisplay_700Bold,
     SourceSans3_400Regular,
     SourceSans3_500Medium,
     SourceSans3_600SemiBold,
@@ -63,7 +57,7 @@ export default function App() {
 
   if (!keysMigrated || !fontsLoaded) {
     // Behind the still-visible native splash, so the flash is never shown.
-    return <View style={{ flex: 1, backgroundColor: '#F7F5F0' }} />;
+    return <View style={{ flex: 1, backgroundColor: '#FAFAF8' }} />;
   }
 
   return (

@@ -1,14 +1,13 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
 
-import { radius as radii, spacing, withAlpha } from '../constants/theme';
+import { spacing } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { Button } from './Button';
 import { Type } from './Type';
 
 interface Props {
-  icon?: keyof typeof Ionicons.glyphMap;
+  icon?: string;
   title: string;
   subtitle?: string;
   actionLabel?: string;
@@ -17,8 +16,8 @@ interface Props {
   onSecondary?: () => void;
 }
 
+/** Minimal empty state — title, subtitle, one action. No icon medallion. */
 export function EmptyState({
-  icon = 'cube-outline',
   title,
   subtitle,
   actionLabel,
@@ -30,33 +29,19 @@ export function EmptyState({
 
   return (
     <View style={styles.wrap} accessibilityRole="summary">
-      <View
-        style={[
-          styles.medallion,
-          {
-            borderRadius: radii.pill,
-            backgroundColor: withAlpha(palette.accent, 0.12),
-            borderColor: withAlpha(palette.accent, 0.35),
-          },
-        ]}
-      >
-        <Ionicons name={icon} size={34} color={palette.accent} />
-      </View>
-      <Type role="heading" align="center" pressed>
+      <Type role="heading" align="center">
         {title}
       </Type>
       {subtitle ? (
-        <Type role="caption" align="center" style={styles.subtitle}>
+        <Type role="caption" align="center" color={palette.inkSoft} style={styles.subtitle}>
           {subtitle}
         </Type>
       ) : null}
       {actionLabel && onAction ? (
-        <View style={styles.actions}>
-          <Button label={actionLabel} onPress={onAction} variant="primary" size="md" haptic="medium" />
-          {secondaryLabel && onSecondary ? (
-            <Button label={secondaryLabel} onPress={onSecondary} variant="plain" size="md" />
-          ) : null}
-        </View>
+        <Button label={actionLabel} onPress={onAction} variant="outline" size="md" style={styles.action} />
+      ) : null}
+      {secondaryLabel && onSecondary ? (
+        <Button label={secondaryLabel} onPress={onSecondary} variant="plain" size="sm" />
       ) : null}
     </View>
   );
@@ -65,25 +50,16 @@ export function EmptyState({
 const styles = StyleSheet.create({
   wrap: {
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.xxl,
+    paddingVertical: spacing.xxxl,
     paddingHorizontal: spacing.lg,
-  },
-  medallion: {
-    width: 72,
-    height: 72,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    marginBottom: spacing.xs,
+    gap: spacing.md,
   },
   subtitle: {
-    maxWidth: 320,
-    lineHeight: 21,
+    maxWidth: 280,
+    lineHeight: 22,
   },
-  actions: {
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.md,
+  action: {
+    marginTop: spacing.sm,
+    minWidth: 140,
   },
 });

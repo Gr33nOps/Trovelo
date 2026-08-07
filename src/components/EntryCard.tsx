@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { KIND_CONFIG } from '../constants/kinds';
-import { HIT_SLOP, fonts, fontSizes, spacing, weights } from '../constants/theme';
+import { HIT_SLOP, spacing } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { Entry } from '../types';
 import { formatDueLabel, formatShortRelative } from '../utils/date';
@@ -14,14 +14,10 @@ interface Props {
   folderName?: string;
   onPress: () => void;
   onLongPress?: () => void;
-  /** Shown as a checkbox for tasks. Omit to hide the checkbox entirely. */
   onToggleDone?: () => void;
 }
 
-/**
- * Editorial list row: kind + relative time on top, body below, hairline below.
- * No card chrome — the list itself is the surface.
- */
+/** Flat list row — meta on one line, body below. No card chrome. */
 export const EntryCard = memo(
   function EntryCard({ entry, folderName, onPress, onLongPress, onToggleDone }: Props) {
     const { palette } = useTheme();
@@ -30,16 +26,16 @@ export const EntryCard = memo(
     const isTask = kind === 'task';
     const done = entry.status === 'done';
     const overdue = isTask && !done && !!entry.dueAt && entry.dueAt < Date.now();
-    const display = entry.title ? `${entry.title} — ${preview}` : preview;
+    const display = entry.title?.trim() || preview;
 
     return (
       <Pressable
         onPress={onPress}
         onLongPress={onLongPress}
         accessibilityRole="button"
-        accessibilityLabel={entry.title ?? preview.slice(0, 80)}
+        accessibilityLabel={display.slice(0, 80)}
         accessibilityHint="Opens this entry"
-        style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+        style={({ pressed }) => [styles.row, pressed && { opacity: 0.55 }]}
       >
         <View style={styles.meta}>
           <View style={styles.metaLeft}>
@@ -50,7 +46,6 @@ export const EntryCard = memo(
                 accessibilityRole="checkbox"
                 accessibilityState={{ checked: done }}
                 accessibilityLabel={done ? 'Mark task not done' : 'Mark task done'}
-                style={styles.checkbox}
               >
                 <Ionicons
                   name={done ? 'checkbox' : 'square-outline'}
@@ -59,33 +54,39 @@ export const EntryCard = memo(
                 />
               </Pressable>
             ) : null}
-            <Type role="label" color={palette.inkFaint} style={styles.kind}>
+            <Type role="label" color={palette.inkFaint}>
               {KIND_CONFIG[kind].label}
             </Type>
-            {entry.isPinned ? <Ionicons name="bookmark" size={14} color={palette.accent} /> : null}
-            {entry.isFavorite ? <Ionicons name="star" size={14} color={palette.accent} /> : null}
+            {entry.isPinned ? <Ionicons name="bookmark" size={13} color={palette.accent} /> : null}
+            {entry.isFavorite ? <Ionicons name="star" size={13} color={palette.accent} /> : null}
           </View>
-          <Type role="label" color={palette.inkFaint} style={styles.when}>
+          <Type role="caption" color={palette.inkFaint}>
             {formatShortRelative(entry.createdAt)}
           </Type>
         </View>
 
         <Type
           role="body"
-          numberOfLines={4}
+          numberOfLines={3}
           color={done ? palette.inkFaint : palette.ink}
-          style={[styles.body, done && styles.doneText]}
+          style={done ? styles.done : undefined}
         >
           {display}
         </Type>
 
+        {entry.title && preview && entry.title.trim() !== preview ? (
+          <Type role="caption" numberOfLines={2} color={palette.inkSoft}>
+            {preview}
+          </Type>
+        ) : null}
+
         {isTask && entry.dueAt && !done ? (
-          <Type role="caption" color={overdue ? palette.danger : palette.inkFaint} style={styles.due}>
+          <Type role="caption" color={overdue ? palette.danger : palette.inkFaint}>
             {formatDueLabel(entry.dueAt)}
             {folderName ? ` · ${folderName}` : ''}
           </Type>
         ) : folderName ? (
-          <Type role="caption" color={palette.inkFaint} style={styles.due}>
+          <Type role="caption" color={palette.inkFaint}>
             {folderName}
           </Type>
         ) : null}
@@ -114,9 +115,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xl,
     gap: spacing.sm,
   },
-  pressed: {
-    opacity: 0.7,
-  },
   meta: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -129,28 +127,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     flexShrink: 1,
   },
-  checkbox: {
-    marginRight: 2,
-  },
-  kind: {
-    letterSpacing: 1.4,
-  },
-  when: {
-    letterSpacing: 0.8,
-    textTransform: 'none',
-    fontFamily: fonts.body,
-    fontWeight: weights.regular,
-    fontSize: fontSizes.xs,
-  },
-  body: {
-    fontFamily: fonts.body,
-    fontSize: fontSizes.md,
-    lineHeight: 28,
-  },
-  doneText: {
+  done: {
     textDecorationLine: 'line-through',
-  },
-  due: {
-    marginTop: 2,
   },
 });

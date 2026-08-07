@@ -141,6 +141,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     paddingVertical: spacing.md,
+    paddingHorizontal: 0,
   },
   footer: {
     flexDirection: 'row',

@@ -5,7 +5,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 
 import { RemoteAiSettings } from '../components/RemoteAiSettings';
-import { ACCENT_COLORS, contrastingInk, radius as radii, spacing } from '../constants/theme';
+import { ACCENT_COLORS, PAGE_PAD, contrastingInk, radius as radii, spacing } from '../constants/theme';
 import { useEntries } from '../context/EntriesContext';
 import { useSettings } from '../context/SettingsContext';
 import { useTheme } from '../context/ThemeContext';
@@ -583,9 +583,9 @@ export default function SettingsScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   content: {
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.md,
-    gap: spacing.xl,
+    paddingHorizontal: PAGE_PAD,
+    paddingTop: spacing.sm,
+    gap: spacing.xxl,
   },
   accentRow: {
     flexDirection: 'row',

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -23,22 +23,16 @@ export type MainTabParamList = {
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
-/** Blank stand-in; the New tab never stays focused — it opens EntryEdit. */
 function NewPlaceholder() {
   return <View style={{ flex: 1 }} />;
 }
 
-/**
- * Text-only bottom bar matching the editorial layout:
- * Trovelo · Surprise · + New · Settings
- *
- * Stats stays in the navigator (hidden from the bar) so Settings can still
- * open it without dropping the feature.
- */
+/** Text-only bar: Trovelo · Surprise · + New · Settings. Stats stays reachable. */
 export function MainTabs() {
   const { palette } = useTheme();
   const insets = useSafeAreaInsets();
   const haptics = useHaptics();
+  const barHeight = 52 + Math.max(insets.bottom, spacing.sm);
 
   return (
     <Tab.Navigator
@@ -46,21 +40,20 @@ export function MainTabs() {
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: palette.ink,
-        tabBarInactiveTintColor: palette.inkSoft,
+        tabBarInactiveTintColor: palette.inkFaint,
         tabBarStyle: {
-          backgroundColor: palette.chromeGradient.colors[0],
-          borderTopColor: palette.chromeBorder,
+          backgroundColor: palette.backdrop,
+          borderTopColor: palette.edge,
           borderTopWidth: StyleSheet.hairlineWidth,
           elevation: 0,
           shadowOpacity: 0,
-          height: 56 + insets.bottom,
-          paddingBottom: insets.bottom,
+          height: barHeight,
+          paddingBottom: Math.max(insets.bottom, spacing.sm),
           paddingTop: spacing.sm,
         },
-        tabBarLabelStyle: {
-          fontFamily: fonts.body,
-          fontSize: fontSizes.sm,
-          fontWeight: weights.regular,
+        tabBarItemStyle: {
+          justifyContent: 'center',
+          alignItems: 'center',
         },
         tabBarIcon: () => null,
         tabBarShowLabel: true,
@@ -70,18 +63,14 @@ export function MainTabs() {
         name="Library"
         component={LibraryScreen}
         options={{
-          tabBarLabel: ({ color, focused }) => (
-            <TabLabel label="Trovelo" color={color} focused={focused} />
-          ),
+          tabBarLabel: ({ color, focused }) => <TabLabel label="Trovelo" color={color} focused={focused} />,
         }}
       />
       <Tab.Screen
         name="Home"
         component={HomeScreen}
         options={{
-          tabBarLabel: ({ color, focused }) => (
-            <TabLabel label="Surprise" color={color} focused={focused} />
-          ),
+          tabBarLabel: ({ color, focused }) => <TabLabel label="Surprise" color={color} focused={focused} />,
         }}
       />
       <Tab.Screen
@@ -95,18 +84,14 @@ export function MainTabs() {
           },
         })}
         options={{
-          tabBarLabel: ({ color, focused }) => (
-            <TabLabel label="+ New" color={color} focused={focused} />
-          ),
+          tabBarLabel: ({ color, focused }) => <TabLabel label="+ New" color={color} focused={focused} />,
         }}
       />
       <Tab.Screen
         name="Settings"
         component={SettingsScreen}
         options={{
-          tabBarLabel: ({ color, focused }) => (
-            <TabLabel label="Settings" color={color} focused={focused} />
-          ),
+          tabBarLabel: ({ color, focused }) => <TabLabel label="Settings" color={color} focused={focused} />,
         }}
       />
       <Tab.Screen
@@ -114,7 +99,7 @@ export function MainTabs() {
         component={StatsScreen}
         options={{
           tabBarButton: () => null,
-          tabBarItemStyle: { display: 'none' },
+          tabBarItemStyle: { display: 'none', width: 0 },
         }}
       />
     </Tab.Navigator>
@@ -127,7 +112,7 @@ function TabLabel({ label, color, focused }: { label: string; color: string; foc
       role="body"
       color={color}
       numberOfLines={1}
-      style={[styles.tabLabel, focused && styles.tabLabelFocused]}
+      style={[styles.label, focused && styles.labelFocused]}
     >
       {label}
     </Type>
@@ -135,13 +120,14 @@ function TabLabel({ label, color, focused }: { label: string; color: string; foc
 }
 
 const styles = StyleSheet.create({
-  tabLabel: {
+  label: {
     fontFamily: fonts.body,
     fontSize: fontSizes.sm,
     fontWeight: weights.regular,
     textAlign: 'center',
+    marginTop: -18,
   },
-  tabLabelFocused: {
+  labelFocused: {
     fontFamily: fonts.bodySemibold,
     fontWeight: weights.semibold,
   },
