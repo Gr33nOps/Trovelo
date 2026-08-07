@@ -1,24 +1,24 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
-import { EntryCard } from '../components/EntryCard';
 import { StatusPicker } from '../components/StatusPicker';
 import { SurpriseCard } from '../components/SurpriseCard';
 import { KIND_CONFIG, KIND_ORDER } from '../constants/kinds';
-import { HIT_SLOP, radius as radii, spacing, withAlpha } from '../constants/theme';
+import { HIT_SLOP, fonts, fontSizes, radius as radii, spacing, withAlpha } from '../constants/theme';
 import { useEntries } from '../context/EntriesContext';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useHaptics } from '../hooks/useHaptics';
 import { MainTabScreenProps } from '../navigation';
-import { Category, Entry, EntryKind, EntryStatus } from '../types';
+import { Entry, EntryKind, EntryStatus } from '../types';
 import { Button } from '../ui/Button';
 import { IconButton } from '../ui/Controls';
 import { EmptyState } from '../ui/EmptyState';
 import { IconTile } from '../ui/IconTile';
-import { NavAction, NavBar } from '../ui/NavBar';
 import { Backdrop, Panel, Rule } from '../ui/Surface';
 import { Type } from '../ui/Type';
 import {
@@ -26,8 +26,6 @@ import {
   dayKey,
   formatDate,
   formatDueLabel,
-  formatFullDate,
-  greetingForHour,
   isOnThisDay,
   todayKey,
   yearsAgo,
@@ -38,15 +36,10 @@ type Props = MainTabScreenProps<'Home'>;
 
 /** How many recent reveals to avoid repeating. */
 const RECENT_WINDOW = 8;
-/** Entries shown in "Recently added", newest first. */
-const RECENT_COUNT = 4;
 
 export default function HomeScreen({ navigation }: Props) {
-  // useBottomTabBarHeight() already includes the bottom safe-area inset, since
-  // the tab bar itself pads for it. Adding insets.bottom on top of that (the
-  // old code did) double-counted it and left far more empty space under the
-  // last item than the small gap that was intended.
   const tabBarHeight = useBottomTabBarHeight();
+  const insets = useSafeAreaInsets();
   const { entries, categories, recordViewed, setStatus, toggleFavorite, updateEntry } = useEntries();
   const { palette, streak } = useTheme();
   const haptics = useHaptics();
@@ -79,22 +72,6 @@ export default function HomeScreen({ navigation }: Props) {
     [entries],
   );
 
-  const recentEntries = useMemo(
-    () =>
-      entries
-        .filter((entry) => !entry.archivedAt)
-        .slice()
-        .sort((a, b) => b.createdAt - a.createdAt)
-        .slice(0, RECENT_COUNT),
-    [entries],
-  );
-
-  const folderNames = useMemo(
-    () => new Map(categories.map((category: Category) => [category.id, category.name])),
-    [categories],
-  );
-
-  // Read the live entry so edits made elsewhere show up on the card.
   const revealed = useMemo(
     () => (revealedId ? entries.find((entry) => entry.id === revealedId) ?? null : null),
     [revealedId, entries],
@@ -113,9 +90,6 @@ export default function HomeScreen({ navigation }: Props) {
       return;
     }
 
-    // Keep a short trail of what was just shown. The old version computed a
-    // window of 0 for a one-entry box, and `slice(-0)` returns the whole array,
-    // so the exclusion list grew without bound.
     const window = Math.max(0, Math.min(RECENT_WINDOW, entries.length - 1));
     const trail = [...recentlyShown.current, next.id];
     recentlyShown.current = window === 0 ? [] : trail.slice(-window);
@@ -124,6 +98,16 @@ export default function HomeScreen({ navigation }: Props) {
     recordViewed(next.id);
     haptics.medium();
   }, [entries, haptics, recordViewed, toast]);
+
+  const surpriseRef = useRef(surprise);
+  surpriseRef.current = surprise;
+
+  // Fresh surprise whenever this tab is opened (ref avoids re-firing on entry updates).
+  useFocusEffect(
+    useCallback(() => {
+      surpriseRef.current();
+    }, []),
+  );
 
   const handleStatus = (status: EntryStatus) => {
     if (!revealed) return;
@@ -158,33 +142,20 @@ export default function HomeScreen({ navigation }: Props) {
     }
   };
 
-  const openEntry = (entryId: string) => navigation.navigate('EntryDetail', { entryId });
-
-  const toggleDone = (entry: Entry) => {
-    haptics.light();
-    setStatus(entry.id, entry.status === 'done' ? 'new' : 'done');
-  };
-
   const hasEntries = entries.length > 0;
   const showTodayCard = todayItems.length > 0 || !todayJournal;
 
   return (
     <Backdrop>
-      <NavBar
-        title="Trovelo"
-        subtitle={formatFullDate(new Date())}
-        right={<NavAction icon="add" label="Add" onPress={() => navigation.navigate('EntryEdit')} />}
-      />
-
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + spacing.lg }]}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insets.top + spacing.lg, paddingBottom: tabBarHeight + spacing.xl },
+        ]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.greetingRow}>
-          <Type role="title" pressed>
-            {greetingForHour()}
-          </Type>
-          {streak > 1 ? (
+        {streak > 1 ? (
+          <View style={styles.streakRow}>
             <View
               style={[
                 styles.streak,
@@ -196,15 +167,80 @@ export default function HomeScreen({ navigation }: Props) {
               ]}
               accessibilityLabel={`${streak} day streak`}
             >
-              <Ionicons name="flame" size={13} color={palette.accent} />
+              <Ionicons name="flame" size={14} color={palette.accent} />
               <Type role="caption" color={palette.accent} style={styles.streakLabel}>
-                {streak}
+                {streak} day streak
               </Type>
             </View>
-          ) : null}
-        </View>
+          </View>
+        ) : null}
 
-        <QuickAdd onPick={(kind) => navigation.navigate('EntryEdit', { initialKind: kind })} />
+        {!hasEntries ? (
+          <EmptyState
+            icon="cube-outline"
+            title="Your box is empty"
+            subtitle="Add something you don't want to forget, then come back for a surprise."
+            actionLabel="Add"
+            onAction={() => navigation.navigate('EntryEdit')}
+          />
+        ) : revealed ? (
+          <View style={styles.revealArea}>
+            <SurpriseCard
+              entry={revealed}
+              folderName={folderName}
+              onToggleFavorite={() => {
+                toggleFavorite(revealed.id);
+                haptics.light();
+              }}
+            />
+
+            <Pressable
+              onPress={surprise}
+              hitSlop={HIT_SLOP}
+              accessibilityRole="button"
+              accessibilityLabel="Show me another"
+              style={({ pressed }) => [styles.anotherLink, { opacity: pressed ? 0.55 : 1 }]}
+            >
+              <Type role="body" color={palette.inkSoft} style={styles.anotherText}>
+                Show me another.
+              </Type>
+            </Pressable>
+
+            <View style={styles.secondaryActions}>
+              <StatusPicker value={revealed.status} onChange={handleStatus} hideNew />
+              <View style={styles.actionRow}>
+                <Button
+                  label="Open"
+                  onPress={() => navigation.navigate('EntryDetail', { entryId: revealed.id })}
+                  variant="plain"
+                  size="md"
+                  style={styles.grow}
+                />
+                <Button label="Share" onPress={() => share(revealed)} variant="plain" size="md" style={styles.grow} />
+                <Button
+                  label="Put back"
+                  onPress={() => {
+                    setRevealedId(null);
+                    haptics.light();
+                  }}
+                  variant="plain"
+                  size="md"
+                  style={styles.grow}
+                />
+              </View>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.idle}>
+            <Type role="title" align="center">
+              Ready when you are
+            </Type>
+            <Type role="caption" align="center" color={palette.inkSoft} style={styles.idleHint}>
+              {entries.length} {entries.length === 1 ? 'thing' : 'things'} waiting
+            </Type>
+            <Button label="SURPRISE ME" onPress={surprise} variant="outline" size="lg" fullWidth haptic="medium" />
+          </View>
+        )}
 
         {showTodayCard ? (
           <TodayCard
@@ -225,115 +261,12 @@ export default function HomeScreen({ navigation }: Props) {
           />
         ) : null}
 
-        {!hasEntries ? (
-          <Panel style={styles.emptyPanel} borderRadius={radii.xl}>
-            <EmptyState
-              icon="cube-outline"
-              title="Your box is empty"
-              subtitle="Add something you don't want to forget."
-              actionLabel="Add"
-              onAction={() => navigation.navigate('EntryEdit')}
-            />
-          </Panel>
-        ) : revealed ? (
-          <View style={styles.revealArea}>
-            <SurpriseCard
-              entry={revealed}
-              folderName={folderName}
-              onToggleFavorite={() => {
-                toggleFavorite(revealed.id);
-                haptics.light();
-              }}
-            />
-
-            <Panel style={styles.actionPanel} borderRadius={radii.lg}>
-              <Type role="label" pressed>
-                How does it look now?
-              </Type>
-              <StatusPicker value={revealed.status} onChange={handleStatus} hideNew />
-
-              <View style={styles.actionRow}>
-                <Button
-                  label="Another one"
-                  onPress={surprise}
-                  variant="primary"
-                  size="md"
-                  haptic="medium"
-                  style={styles.grow}
-                  icon={<Ionicons name="shuffle" size={16} color={palette.accentInk} />}
-                />
-                <Button
-                  label="Open"
-                  onPress={() => navigation.navigate('EntryDetail', { entryId: revealed.id })}
-                  variant="secondary"
-                  size="md"
-                  style={styles.grow}
-                />
-              </View>
-
-              <View style={styles.actionRow}>
-                <Button
-                  label="Share"
-                  onPress={() => share(revealed)}
-                  variant="plain"
-                  size="sm"
-                  style={styles.grow}
-                />
-                <Button
-                  label="Put it back"
-                  onPress={() => {
-                    setRevealedId(null);
-                    haptics.light();
-                  }}
-                  variant="plain"
-                  size="sm"
-                  style={styles.grow}
-                />
-              </View>
-            </Panel>
-          </View>
-        ) : (
-          <View style={styles.dashboard}>
-            <SurpriseTeaser count={entries.length} onOpen={surprise} />
-
-            {recentEntries.length > 0 ? (
-              <View style={styles.section}>
-                <View style={styles.sectionHeaderRow}>
-                  <Type role="label" pressed>
-                    Recently added
-                  </Type>
-                  <Pressable
-                    onPress={() => navigation.navigate('Library')}
-                    hitSlop={HIT_SLOP}
-                    accessibilityRole="button"
-                    accessibilityLabel="See everything in the library"
-                  >
-                    <Type role="caption" color={palette.accent}>
-                      See all
-                    </Type>
-                  </Pressable>
-                </View>
-                <View style={styles.recentList}>
-                  {recentEntries.map((entry) => (
-                    <EntryCard
-                      key={entry.id}
-                      entry={entry}
-                      folderName={entry.categoryId ? folderNames.get(entry.categoryId) : undefined}
-                      onPress={() => openEntry(entry.id)}
-                      onToggleDone={entry.kind === 'task' ? () => toggleDone(entry) : undefined}
-                    />
-                  ))}
-                </View>
-              </View>
-            ) : null}
-          </View>
-        )}
+        <QuickAdd onPick={(kind) => navigation.navigate('EntryEdit', { initialKind: kind })} />
       </ScrollView>
     </Backdrop>
   );
 }
 
-/** One tap from Home straight into a new entry of a given kind. */
 function QuickAdd({ onPick }: { onPick: (kind: EntryKind) => void }) {
   const haptics = useHaptics();
   const { palette } = useTheme();
@@ -348,7 +281,7 @@ function QuickAdd({ onPick }: { onPick: (kind: EntryKind) => void }) {
           }}
           accessibilityRole="button"
           accessibilityLabel={`Add ${KIND_CONFIG[kind].label.toLowerCase()}`}
-          style={({ pressed }) => [styles.quickAddItem, pressed && styles.surprisePressed]}
+          style={({ pressed }) => [styles.quickAddItem, pressed && { opacity: 0.7 }]}
         >
           <IconTile icon={KIND_CONFIG[kind].icon} size={44} iconSize={20} tint={palette.accent} />
           <Type role="caption" style={styles.quickAddLabel} numberOfLines={1}>
@@ -360,44 +293,11 @@ function QuickAdd({ onPick }: { onPick: (kind: EntryKind) => void }) {
   );
 }
 
-/**
- * A single, normally-sized row rather than a screen-dominating hero: the app
- * does a lot more than rediscovery now, so Surprise Me is one entry point
- * among several rather than the entire point of the home screen.
- */
-function SurpriseTeaser({ count, onOpen }: { count: number; onOpen: () => void }) {
-  const { palette } = useTheme();
-
-  return (
-    <Pressable
-      onPress={onOpen}
-      accessibilityRole="button"
-      accessibilityLabel={`Surprise me. ${count} ${count === 1 ? 'thing' : 'things'} in the box.`}
-      accessibilityHint="Shows one thing you saved earlier, picked for you"
-      style={({ pressed }) => [pressed && styles.surprisePressed]}
-    >
-      <Panel style={styles.surpriseCard} borderRadius={radii.lg} gradient={palette.accentGradient} texture="none">
-        <Ionicons name="sparkles" size={20} color={palette.accentInk} />
-        <View style={styles.surpriseText}>
-          <Type role="bodyStrong" color={palette.accentInk} onAccent>
-            Surprise me
-          </Type>
-          <Type role="caption" color={palette.accentInk} onAccent numberOfLines={1} style={styles.surpriseHint}>
-            {count} {count === 1 ? 'thing' : 'things'} waiting, picks what you have seen least
-          </Type>
-        </View>
-        <Ionicons name="chevron-forward" size={18} color={palette.accentInk} />
-      </Panel>
-    </Pressable>
-  );
-}
-
 interface TodayEntryItem {
   entry: Entry;
   reason: 'due' | 'reminder';
 }
 
-/** Due tasks, due reminders and the day's journal prompt, only when any of them exist. */
 function TodayCard({
   items,
   todayJournal,
@@ -416,7 +316,7 @@ function TodayCard({
   const { palette } = useTheme();
 
   return (
-    <Panel style={styles.todayCard} borderRadius={radii.lg}>
+    <Panel style={styles.todayCard} borderRadius={radii.lg} borderColor="transparent">
       <Type role="label" pressed>
         Today
       </Type>
@@ -427,7 +327,7 @@ function TodayCard({
         accessibilityLabel={todayJournal ? "Open today's journal entry" : 'Write a journal entry for today'}
         style={({ pressed }) => [styles.todayRow, { opacity: pressed ? 0.65 : 1 }]}
       >
-        <Ionicons name="book-outline" size={17} color={palette.inkSoft} />
+        <Ionicons name="book-outline" size={18} color={palette.inkSoft} />
         <View style={styles.todayRowText}>
           <Type role="bodyStrong" numberOfLines={1}>
             {todayJournal ? "Today's entry" : 'Write today'}
@@ -436,7 +336,6 @@ function TodayCard({
             {todayJournal ? todayJournal.text : 'A line or two about how today is going.'}
           </Type>
         </View>
-        <Ionicons name="chevron-forward" size={15} color={palette.inkFaint} />
       </Pressable>
 
       {items.map(({ entry, reason }) => {
@@ -452,10 +351,10 @@ function TodayCard({
                   accessibilityRole="checkbox"
                   accessibilityLabel="Mark task done"
                 >
-                  <Ionicons name="square-outline" size={19} color={palette.inkFaint} />
+                  <Ionicons name="square-outline" size={20} color={palette.inkFaint} />
                 </Pressable>
               ) : (
-                <Ionicons name="notifications-outline" size={17} color={palette.inkSoft} />
+                <Ionicons name="notifications-outline" size={18} color={palette.inkSoft} />
               )}
               <Pressable
                 onPress={() => onOpenEntry(entry.id)}
@@ -481,7 +380,6 @@ function TodayCard({
   );
 }
 
-/** Entries saved on this calendar date in an earlier year. Dismissible per session. */
 function OnThisDayCard({
   entries: memories,
   onOpenEntry,
@@ -494,14 +392,11 @@ function OnThisDayCard({
   const { palette } = useTheme();
 
   return (
-    <Panel style={styles.todayCard} borderRadius={radii.lg}>
+    <Panel style={styles.todayCard} borderRadius={radii.lg} borderColor="transparent">
       <View style={styles.memoryHeader}>
-        <View style={styles.memoryHeaderText}>
-          <Ionicons name="time-outline" size={16} color={palette.inkSoft} />
-          <Type role="label" pressed>
-            On this day
-          </Type>
-        </View>
+        <Type role="label" pressed>
+          On this day
+        </Type>
         <IconButton icon="close" label="Dismiss" size={16} onPress={onDismiss} />
       </View>
 
@@ -524,7 +419,6 @@ function OnThisDayCard({
                   {years === 1 ? 'A year ago' : `${years} years ago`} · {formatDate(entry.createdAt)}
                 </Type>
               </View>
-              <Ionicons name="chevron-forward" size={15} color={palette.inkFaint} />
             </Pressable>
           </View>
         );
@@ -535,14 +429,11 @@ function OnThisDayCard({
 
 const styles = StyleSheet.create({
   content: {
-    padding: spacing.lg,
-    gap: spacing.lg,
+    paddingHorizontal: spacing.xl,
+    gap: spacing.xl,
   },
-  greetingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
+  streakRow: {
+    alignItems: 'flex-end',
   },
   streak: {
     flexDirection: 'row',
@@ -555,6 +446,43 @@ const styles = StyleSheet.create({
   streakLabel: {
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
+    textTransform: 'none',
+    letterSpacing: 0,
+  },
+  revealArea: {
+    gap: spacing.xl,
+    minHeight: 320,
+    justifyContent: 'center',
+    paddingTop: spacing.xxl,
+  },
+  anotherLink: {
+    alignSelf: 'flex-start',
+    paddingVertical: spacing.sm,
+  },
+  anotherText: {
+    fontFamily: fonts.body,
+    fontSize: fontSizes.md,
+    textDecorationLine: 'underline',
+    textDecorationColor: '#9A948A',
+  },
+  secondaryActions: {
+    gap: spacing.md,
+    marginTop: spacing.lg,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  grow: {
+    flex: 1,
+  },
+  idle: {
+    gap: spacing.md,
+    paddingVertical: spacing.xxxl,
+    alignItems: 'stretch',
+  },
+  idleHint: {
+    marginBottom: spacing.md,
   },
   quickAdd: {
     flexDirection: 'row',
@@ -585,58 +513,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  memoryHeaderText: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  emptyPanel: {
-    paddingVertical: spacing.sm,
-  },
-  dashboard: {
-    gap: spacing.lg,
-  },
-  surprisePressed: {
-    opacity: 0.85,
-  },
-  surpriseCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.md,
-  },
-  surpriseText: {
-    flex: 1,
-    gap: 1,
-  },
-  surpriseHint: {
-    opacity: 0.85,
-  },
-  section: {
-    gap: spacing.sm,
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.xs,
-  },
-  recentList: {
-    gap: spacing.sm,
-  },
-  revealArea: {
-    gap: spacing.md,
-  },
-  actionPanel: {
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  grow: {
-    flex: 1,
   },
 });

@@ -75,7 +75,7 @@ export default function StatsScreen({ navigation }: Props) {
   if (entries.length === 0) {
     return (
       <Backdrop>
-        <NavBar title="Stats" />
+        <NavBar title="Stats" align="start" large borderless />
         <EmptyState
           icon="stats-chart-outline"
           title="Nothing to count yet"
@@ -92,7 +92,7 @@ export default function StatsScreen({ navigation }: Props) {
       {/* This is a tab root, reached by tapping the Stats tab, not pushed on
           top of anything, so there is nothing to go back to. The stray title
           and back button were left over from before Stats was a tab. */}
-      <NavBar title="Stats" />
+      <NavBar title="Stats" align="start" large borderless />
 
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + spacing.lg }]}

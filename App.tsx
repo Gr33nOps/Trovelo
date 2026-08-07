@@ -1,6 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View } from 'react-native';
 import { DefaultTheme, NavigationContainer, Theme as NavTheme } from '@react-navigation/native';
+import {
+  PlayfairDisplay_400Regular,
+  PlayfairDisplay_700Bold,
+  useFonts,
+} from '@expo-google-fonts/playfair-display';
+import {
+  SourceSans3_400Regular,
+  SourceSans3_500Medium,
+  SourceSans3_600SemiBold,
+} from '@expo-google-fonts/source-sans-3';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import * as SystemUI from 'expo-system-ui';
@@ -26,6 +36,13 @@ export default function App() {
   // Move any data stored under the old `@serendipity/*` keys to `@trovelo/*`
   // before any provider reads, so the rename is invisible to existing users.
   const [keysMigrated, setKeysMigrated] = useState(false);
+  const [fontsLoaded] = useFonts({
+    PlayfairDisplay_400Regular,
+    PlayfairDisplay_700Bold,
+    SourceSans3_400Regular,
+    SourceSans3_500Medium,
+    SourceSans3_600SemiBold,
+  });
 
   useEffect(() => {
     let active = true;
@@ -44,9 +61,9 @@ export default function App() {
     return removeAiHooks;
   }, []);
 
-  if (!keysMigrated) {
+  if (!keysMigrated || !fontsLoaded) {
     // Behind the still-visible native splash, so the flash is never shown.
-    return <View style={{ flex: 1, backgroundColor: '#F2F2F2' }} />;
+    return <View style={{ flex: 1, backgroundColor: '#F7F5F0' }} />;
   }
 
   return (

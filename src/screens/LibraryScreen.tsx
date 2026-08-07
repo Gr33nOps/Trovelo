@@ -1,13 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { Alert, FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AskBoxPanel } from '../components/AskBoxPanel';
 import { EntryCard } from '../components/EntryCard';
 import { KIND_CONFIG, KIND_ORDER } from '../constants/kinds';
 import { STATUS_FILTER_OPTIONS } from '../constants/status';
-import { HIT_SLOP, contrastingInk, radius as radii, spacing } from '../constants/theme';
+import { HIT_SLOP, fonts, fontSizes, spacing, weights } from '../constants/theme';
 import { useEntries } from '../context/EntriesContext';
 import { useSettings } from '../context/SettingsContext';
 import { useTheme } from '../context/ThemeContext';
@@ -17,11 +18,10 @@ import { DictationDenial, useDictation } from '../hooks/useDictation';
 import { useHaptics } from '../hooks/useHaptics';
 import { MainTabScreenProps } from '../navigation';
 import { Entry, EntryKind, SortOrder, StatusFilter } from '../types';
-import { Chip, IconButton } from '../ui/Controls';
+import { Button } from '../ui/Button';
+import { Chip, IconButton, TextTab } from '../ui/Controls';
 import { EmptyState } from '../ui/EmptyState';
-import { Field } from '../ui/Field';
-import { NavAction, NavBar } from '../ui/NavBar';
-import { Backdrop } from '../ui/Surface';
+import { Backdrop, Rule } from '../ui/Surface';
 import { Type } from '../ui/Type';
 import { searchEntries } from '../utils/search';
 import { displayTag } from '../utils/tags';
@@ -40,13 +40,6 @@ const SORT_LABELS: Record<SortOrder, string> = {
 
 const SORT_ORDER: SortOrder[] = ['newest', 'oldest', 'forgotten', 'rediscovered', 'az'];
 
-const KIND_TILE_LABEL: Record<EntryKind, string> = {
-  idea: 'Ideas',
-  note: 'Notes',
-  task: 'Tasks',
-  journal: 'Journals',
-};
-
 const KIND_COUNT_LABEL: Record<EntryKind, [string, string]> = {
   idea: ['idea', 'ideas'],
   note: ['note', 'notes'],
@@ -55,7 +48,8 @@ const KIND_COUNT_LABEL: Record<EntryKind, [string, string]> = {
 };
 
 function countLabel(kindFilter: KindFilter, count: number): string {
-  const [singular, plural] = kindFilter === 'all' || kindFilter === 'archived' ? ['item', 'items'] : KIND_COUNT_LABEL[kindFilter];
+  const [singular, plural] =
+    kindFilter === 'all' || kindFilter === 'archived' ? ['thing', 'things'] : KIND_COUNT_LABEL[kindFilter];
   return count === 1 ? singular : plural;
 }
 
@@ -77,6 +71,7 @@ function sortKey(entry: Entry, order: SortOrder): number | string {
 
 export default function LibraryScreen({ navigation, route }: Props) {
   const tabBarHeight = useBottomTabBarHeight();
+  const insets = useSafeAreaInsets();
   const { palette } = useTheme();
   const { voiceProvider } = useSettings();
   const { entries, categories, loaded, tags: allTags, deleteEntry, restoreEntry, toggleFavorite, updateEntry, setStatus } =
@@ -92,6 +87,7 @@ export default function LibraryScreen({ navigation, route }: Props) {
   const [kindFilter, setKindFilter] = useState<KindFilter>(route.params?.kind ?? 'all');
   const [sort, setSort] = useState<SortOrder>('newest');
   const [showAsk, setShowAsk] = useState(false);
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
 
   useEffect(() => {
     if (route.params?.tag) setTagFilter(route.params.tag);
@@ -127,14 +123,7 @@ export default function LibraryScreen({ navigation, route }: Props) {
     [categories],
   );
 
-  const kindCounts = useMemo(() => {
-    const counts: Record<EntryKind, number> = { idea: 0, note: 0, task: 0, journal: 0 };
-    for (const entry of entries) {
-      if (entry.archivedAt) continue;
-      counts[entry.kind ?? 'idea'] += 1;
-    }
-    return counts;
-  }, [entries]);
+  const keptCount = useMemo(() => entries.filter((entry) => !entry.archivedAt).length, [entries]);
 
   const filtered = useMemo(() => {
     const matches = entries.filter((entry) => {
@@ -170,7 +159,6 @@ export default function LibraryScreen({ navigation, route }: Props) {
       return left - right;
     });
 
-    // Pinned entries float to the top of a browsed (not searched) list.
     const pinned = sorted.filter((entry) => entry.isPinned);
     const rest = sorted.filter((entry) => !entry.isPinned);
     return pinned.length > 0 ? [...pinned, ...rest] : sorted;
@@ -185,6 +173,11 @@ export default function LibraryScreen({ navigation, route }: Props) {
     (entry: Entry) => navigation.navigate('EntryDetail', { entryId: entry.id }),
     [navigation],
   );
+
+  const surprise = useCallback(() => {
+    haptics.medium();
+    navigation.navigate('Home');
+  }, [haptics, navigation]);
 
   const showActions = useCallback(
     (entry: Entry) => {
@@ -252,7 +245,77 @@ export default function LibraryScreen({ navigation, route }: Props) {
     (statusFilter !== 'all' ? 1 : 0) + (categoryFilter ? 1 : 0) + (tagFilter ? 1 : 0) + (kindFilter !== 'all' ? 1 : 0);
 
   const header = (
-    <View style={styles.filters}>
+    <View style={styles.header}>
+      <View style={{ height: insets.top }} />
+
+      <View style={styles.brandBlock}>
+        <Type role="display" accessibilityRole="header">
+          Trovelo
+        </Type>
+        <Type role="caption" color={palette.inkFaint} style={styles.keptCount}>
+          {keptCount} {keptCount === 1 ? 'thing' : 'things'} kept
+        </Type>
+      </View>
+
+      <Button
+        label="SURPRISE ME"
+        onPress={surprise}
+        variant="outline"
+        size="lg"
+        fullWidth
+        haptic="medium"
+        style={styles.surpriseButton}
+        accessibilityLabel={`Surprise me. ${keptCount} things kept.`}
+      />
+
+      <View style={[styles.searchRow, { borderBottomColor: palette.edge }]}>
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search..."
+          placeholderTextColor={palette.inkFaint}
+          returnKeyType="search"
+          autoCorrect={false}
+          accessibilityLabel="Search your entries"
+          selectionColor={palette.accent}
+          cursorColor={palette.accent}
+          style={[
+            styles.searchInput,
+            {
+              color: palette.ink,
+              fontFamily: fonts.body,
+              fontSize: fontSizes.md,
+            },
+          ]}
+        />
+        <View style={styles.searchActions}>
+          {dictation.supported ? (
+            <IconButton
+              icon={dictation.starting ? 'hourglass-outline' : dictation.listening ? 'stop-circle' : 'mic-outline'}
+              label={
+                dictation.starting
+                  ? 'Starting voice search'
+                  : dictation.listening
+                    ? 'Stop listening'
+                    : 'Search by voice'
+              }
+              size={20}
+              active={dictation.listening}
+              disabled={dictation.starting}
+              onPress={() => void dictation.toggle('')}
+            />
+          ) : null}
+          {query ? <IconButton icon="close-circle" label="Clear search" size={20} onPress={() => setQuery('')} /> : null}
+          <IconButton
+            icon="chatbubble-ellipses-outline"
+            label="Ask your box"
+            size={20}
+            active={showAsk}
+            onPress={() => setShowAsk((open) => !open)}
+          />
+        </View>
+      </View>
+
       {showAsk ? (
         <AskBoxPanel
           entries={entries}
@@ -261,93 +324,31 @@ export default function LibraryScreen({ navigation, route }: Props) {
         />
       ) : null}
 
-      <View style={styles.chipRow}>
-        <Chip label="Everything" active={kindFilter === 'all'} onPress={() => setKindFilter('all')} />
+      <View style={styles.kindTabs} accessibilityRole="tablist">
+        <TextTab label="All" active={kindFilter === 'all'} onPress={() => setKindFilter('all')} />
         {KIND_ORDER.map((option) => (
-          <Chip
+          <TextTab
             key={option}
             label={KIND_CONFIG[option].pickerLabel}
             active={kindFilter === option}
             onPress={() => setKindFilter(option)}
-            icon={
-              <Ionicons
-                name={KIND_CONFIG[option].icon}
-                size={12}
-                color={kindFilter === option ? contrastingInk(palette.accent) : palette.inkSoft}
-              />
-            }
-          />
-        ))}
-        <Chip label="Archived" active={kindFilter === 'archived'} onPress={() => setKindFilter('archived')} />
-      </View>
-
-      <View style={styles.countRow}>
-        {KIND_ORDER.map((kind) => (
-          <Pressable
-            key={kind}
-            onPress={() => setKindFilter(kind)}
-            accessibilityRole="button"
-            accessibilityLabel={`${kindCounts[kind]} ${KIND_TILE_LABEL[kind].toLowerCase()}`}
-            style={[
-              styles.countTile,
-              { borderRadius: radii.md, backgroundColor: palette.panel, borderColor: palette.edge },
-            ]}
-          >
-            <Type role="heading" color={palette.ink} numberOfLines={1}>
-              {kindCounts[kind]}
-            </Type>
-            <Type role="caption" color={palette.inkSoft} numberOfLines={1} style={styles.countLabel}>
-              {KIND_TILE_LABEL[kind]}
-            </Type>
-          </Pressable>
-        ))}
-      </View>
-
-      <View style={styles.chipRow}>
-        {STATUS_FILTER_OPTIONS.map((option) => (
-          <Chip
-            key={option.value}
-            label={option.label}
-            active={statusFilter === option.value}
-            onPress={() => setStatusFilter(option.value)}
           />
         ))}
       </View>
-
-      {categories.length > 0 ? (
-        <View style={styles.chipRow}>
-          <Chip label="All folders" active={categoryFilter === null} onPress={() => setCategoryFilter(null)} />
-          <Chip label="Loose" active={categoryFilter === 'none'} onPress={() => setCategoryFilter('none')} />
-          {categories.map((category) => (
-            <Chip
-              key={category.id}
-              label={category.name}
-              active={categoryFilter === category.id}
-              onPress={() => setCategoryFilter(category.id)}
-            />
-          ))}
-        </View>
-      ) : null}
-
-      {allTags.length > 0 ? (
-        <View style={styles.chipRow}>
-          {tagFilter ? (
-            <Chip label={`#${displayTag(tagFilter)}`} active onPress={() => setTagFilter(null)} />
-          ) : (
-            allTags
-              .slice(0, 8)
-              .map(({ tag, count }) => (
-                <Chip key={tag} label={`#${displayTag(tag)}`} count={count} onPress={() => setTagFilter(tag)} />
-              ))
-          )}
-        </View>
-      ) : null}
 
       <View style={styles.summary}>
-        <Type role="caption" color={palette.inkSoft}>
-          {filtered.length} {countLabel(kindFilter, filtered.length)}
-          {activeFilters > 0 ? ' shown' : ''}
-        </Type>
+        <Pressable
+          onPress={() => setShowMoreFilters((open) => !open)}
+          hitSlop={HIT_SLOP}
+          accessibilityRole="button"
+          accessibilityLabel={showMoreFilters ? 'Hide filters' : 'Show more filters'}
+        >
+          <Type role="caption" color={palette.inkSoft}>
+            {filtered.length} {countLabel(kindFilter, filtered.length)}
+            {activeFilters > 0 ? ' shown' : ''}
+            {showMoreFilters ? ' · less' : ' · filters'}
+          </Type>
+        </Pressable>
         <Pressable
           onPress={cycleSort}
           hitSlop={HIT_SLOP}
@@ -355,75 +356,71 @@ export default function LibraryScreen({ navigation, route }: Props) {
           accessibilityLabel={`Sorting by ${SORT_LABELS[sort]}. Tap to change.`}
           style={({ pressed }) => [styles.sortButton, { opacity: pressed ? 0.6 : 1 }]}
         >
-          <Ionicons name="swap-vertical" size={14} color={palette.accent} />
+          <Ionicons name="swap-vertical" size={16} color={palette.accent} />
           <Type role="caption" color={palette.accent} style={styles.sortLabel}>
             {SORT_LABELS[sort]}
           </Type>
         </Pressable>
       </View>
+
+      {showMoreFilters ? (
+        <View style={styles.moreFilters}>
+          <View style={styles.chipRow}>
+            <Chip label="Archived" active={kindFilter === 'archived'} onPress={() => setKindFilter('archived')} />
+            {STATUS_FILTER_OPTIONS.map((option) => (
+              <Chip
+                key={option.value}
+                label={option.label}
+                active={statusFilter === option.value}
+                onPress={() => setStatusFilter(option.value)}
+              />
+            ))}
+          </View>
+
+          {categories.length > 0 ? (
+            <View style={styles.chipRow}>
+              <Chip label="All folders" active={categoryFilter === null} onPress={() => setCategoryFilter(null)} />
+              <Chip label="Loose" active={categoryFilter === 'none'} onPress={() => setCategoryFilter('none')} />
+              {categories.map((category) => (
+                <Chip
+                  key={category.id}
+                  label={category.name}
+                  active={categoryFilter === category.id}
+                  onPress={() => setCategoryFilter(category.id)}
+                />
+              ))}
+            </View>
+          ) : null}
+
+          {allTags.length > 0 ? (
+            <View style={styles.chipRow}>
+              {tagFilter ? (
+                <Chip label={`#${displayTag(tagFilter)}`} active onPress={() => setTagFilter(null)} />
+              ) : (
+                allTags
+                  .slice(0, 8)
+                  .map(({ tag, count }) => (
+                    <Chip key={tag} label={`#${displayTag(tag)}`} count={count} onPress={() => setTagFilter(tag)} />
+                  ))
+              )}
+            </View>
+          ) : null}
+        </View>
+      ) : null}
     </View>
   );
 
   return (
     <Backdrop>
-      <NavBar
-        title="Library"
-        right={
-          <>
-            <NavAction
-              icon="chatbubble-ellipses-outline"
-              label="Ask your box"
-              onPress={() => setShowAsk((open) => !open)}
-            />
-            <NavAction icon="add" label="Add" onPress={() => navigation.navigate('EntryEdit')} />
-          </>
-        }
-        below={
-          <Field
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Search"
-            returnKeyType="search"
-            autoCorrect={false}
-            accessibilityLabel="Search your entries"
-            left={<Ionicons name="search" size={16} color={palette.inkFaint} />}
-            right={
-              <View style={styles.searchActions}>
-                {dictation.supported ? (
-                  <IconButton
-                    icon={dictation.starting ? 'hourglass-outline' : dictation.listening ? 'stop-circle' : 'mic-outline'}
-                    label={
-                      dictation.starting
-                        ? 'Starting voice search'
-                        : dictation.listening
-                          ? 'Stop listening'
-                          : 'Search by voice'
-                    }
-                    size={18}
-                    active={dictation.listening}
-                    disabled={dictation.starting}
-                    onPress={() => void dictation.toggle('')}
-                  />
-                ) : null}
-                {query ? (
-                  <IconButton icon="close-circle" label="Clear search" size={18} onPress={() => setQuery('')} />
-                ) : null}
-              </View>
-            }
-          />
-        }
-      />
-
       <FlatList
         data={filtered}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
         ListHeaderComponent={header}
-        contentContainerStyle={[styles.list, { paddingBottom: tabBarHeight + spacing.lg }]}
-        ItemSeparatorComponent={Separator}
+        contentContainerStyle={[styles.list, { paddingBottom: tabBarHeight + spacing.xl }]}
+        ItemSeparatorComponent={ListRule}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-        // Windowing keeps a large box scrolling smoothly on low-end phones.
         initialNumToRender={8}
         maxToRenderPerBatch={8}
         windowSize={9}
@@ -462,60 +459,70 @@ export default function LibraryScreen({ navigation, route }: Props) {
   );
 }
 
-/** Declared once so the list does not remount every separator on each render. */
-function Separator() {
-  return <View style={styles.separator} />;
+function ListRule() {
+  return <Rule />;
 }
 
 const styles = StyleSheet.create({
   list: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
+    paddingHorizontal: spacing.xl,
   },
-  filters: {
-    gap: spacing.sm,
+  header: {
+    gap: spacing.lg,
     paddingBottom: spacing.md,
   },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
+  brandBlock: {
+    gap: 6,
+    paddingTop: spacing.lg,
   },
-  countRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
+  keptCount: {
+    fontSize: fontSizes.sm,
   },
-  countTile: {
-    flex: 1,
+  surpriseButton: {
+    marginTop: spacing.xs,
+  },
+  searchRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.sm,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingBottom: spacing.sm,
+    gap: spacing.sm,
   },
-  countLabel: {
-    fontWeight: '600',
+  searchInput: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    fontWeight: weights.regular,
   },
   searchActions: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  kindTabs: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'flex-end',
   },
   summary: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.sm,
-    paddingTop: spacing.xs,
   },
   sortButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
     paddingVertical: 6,
-    borderRadius: radii.sm,
   },
   sortLabel: {
     fontWeight: '600',
   },
-  separator: {
-    height: spacing.md,
+  moreFilters: {
+    gap: spacing.sm,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
   },
 });

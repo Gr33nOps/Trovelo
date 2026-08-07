@@ -3,27 +3,12 @@ import { Platform, TextStyle, ViewStyle } from 'react-native';
 import { AccentId } from '../types';
 
 /**
- * Trovelo design language: "Plain".
+ * Trovelo design language: "Editorial".
  *
- * Flat, neutral surfaces (true gray, not tinted), one typeface, and shadow
- * used only where something genuinely sits above the page (a toast, a hero
- * card). Nothing is textured, gradient-filled or drawn to look like a
- * physical object. Depth comes from a thin border and a small lightness step
- * between a surface and what's under it, not from bevels or gloss.
- *
- * The whole app reduces to three colours: black-or-white text, one neutral
- * background per mode, and a single accent. The accent is spent sparingly — on
- * the things that earn it, like a primary action, an active filter or a
- * highlight — rather than on every icon and fill, which is what keeps the
- * chrome quiet. It is the one thing the user picks, in Settings; light and
- * dark mode each just pick the right shade of it.
- *
- * All of it is expressed through the tokens below rather than ad-hoc styles,
- * so light and dark stay consistent and the whole app can be re-skinned from
- * one file. `Gradient` still exists as a type because a few surfaces (the
- * hero card, the door of a progress bar) are still painted with
- * `expo-linear-gradient`, but every value below uses two identical stops, so
- * what actually renders is a flat fill.
+ * Warm cream paper, serif display type for brand and long-form reading,
+ * generous sans for UI chrome. Quiet chrome, one gold accent used sparingly
+ * (primary actions, active filters). Depth comes from space and hairlines,
+ * not cards or shadows.
  */
 
 export type Mood = 'light' | 'dark';
@@ -103,38 +88,38 @@ function flat(color: string): Gradient {
 const LIGHT: Palette = {
   mood: 'light',
 
-  backdrop: '#F2F2F2',
-  backdropGradient: flat('#F2F2F2'),
+  backdrop: '#F7F5F0',
+  backdropGradient: flat('#F7F5F0'),
   backdropTextureOpacity: 0,
 
-  panel: '#FFFFFF',
-  panelGradient: flat('#FFFFFF'),
+  panel: '#F7F5F0',
+  panelGradient: flat('#F7F5F0'),
   panelTextureOpacity: 0,
 
-  well: '#E8E8E8',
-  wellGradient: flat('#E8E8E8'),
+  well: '#EFECE4',
+  wellGradient: flat('#EFECE4'),
 
-  chromeGradient: flat('#F2F2F2'),
-  chromeBorder: '#DCDCDC',
-  chromeInk: '#181818',
+  chromeGradient: flat('#F7F5F0'),
+  chromeBorder: '#E4DFD4',
+  chromeInk: '#2C2824',
 
-  edge: '#DCDCDC',
-  edgeStrong: '#C7C7C7',
+  edge: '#E4DFD4',
+  edgeStrong: '#D4CEC2',
   bevelTop: 'transparent',
-  bevelBottom: 'rgba(0, 0, 0, 0.06)',
+  bevelBottom: 'rgba(44, 40, 36, 0.06)',
 
-  ink: '#181818',
-  inkSoft: '#5A5A5A',
-  inkFaint: '#8A8A8A',
+  ink: '#2C2824',
+  inkSoft: '#6F6A62',
+  inkFaint: '#9A948A',
   emboss: 'transparent',
   embossOnAccent: 'transparent',
 
   // Placeholder; buildPalette() overwrites accent/accentInk/accentGradient/
   // accentEdge with whatever the user picked from ACCENT_COLORS.
-  accent: '#8A6114',
+  accent: '#A07A28',
   accentInk: '#FFFFFF',
-  accentGradient: flat('#8A6114'),
-  accentEdge: '#6B4710',
+  accentGradient: flat('#A07A28'),
+  accentEdge: '#7A5C1C',
 
   danger: '#9A2E22',
   dangerGradient: flat('#9A2E22'),
@@ -142,40 +127,40 @@ const LIGHT: Palette = {
 
   shadow: '#000000',
   scrim: 'rgba(0, 0, 0, 0.5)',
-  switchOff: '#D0D0D0',
+  switchOff: '#D8D2C6',
 };
 
 const DARK: Palette = {
   mood: 'dark',
 
-  backdrop: '#141414',
-  backdropGradient: flat('#141414'),
+  backdrop: '#1A1814',
+  backdropGradient: flat('#1A1814'),
   backdropTextureOpacity: 0,
 
-  panel: '#1E1E1E',
-  panelGradient: flat('#1E1E1E'),
+  panel: '#1A1814',
+  panelGradient: flat('#1A1814'),
   panelTextureOpacity: 0,
 
-  well: '#0E0E0E',
-  wellGradient: flat('#0E0E0E'),
+  well: '#12100E',
+  wellGradient: flat('#12100E'),
 
-  chromeGradient: flat('#141414'),
-  chromeBorder: '#2E2E2E',
-  chromeInk: '#F2F2F2',
+  chromeGradient: flat('#1A1814'),
+  chromeBorder: '#2E2A24',
+  chromeInk: '#F2EFE8',
 
-  edge: '#2E2E2E',
-  edgeStrong: '#3D3D3D',
+  edge: '#2E2A24',
+  edgeStrong: '#3D3830',
   bevelTop: 'transparent',
   bevelBottom: 'rgba(255, 255, 255, 0.07)',
 
-  ink: '#F2F2F2',
-  inkSoft: '#B4B4B4',
-  inkFaint: '#7E7E7E',
+  ink: '#F2EFE8',
+  inkSoft: '#B8B2A6',
+  inkFaint: '#857E72',
   emboss: 'transparent',
   embossOnAccent: 'transparent',
 
   accent: '#E0A93F',
-  accentInk: '#000000',
+  accentInk: '#1A1814',
   accentGradient: flat('#E0A93F'),
   accentEdge: '#6E4A0E',
 
@@ -185,7 +170,7 @@ const DARK: Palette = {
 
   shadow: '#000000',
   scrim: 'rgba(0, 0, 0, 0.65)',
-  switchOff: '#3A3A3A',
+  switchOff: '#3A3530',
 };
 
 export const palettes: Record<Mood, Palette> = { light: LIGHT, dark: DARK };
@@ -198,7 +183,7 @@ export const palettes: Record<Mood, Palette> = { light: LIGHT, dark: DARK };
  * the rest, so a new entry here is the only step needed to add a hue.
  */
 export const ACCENT_COLORS: { id: AccentId; label: string; light: string; dark: string }[] = [
-  { id: 'gold', label: 'Gold', light: '#8A6114', dark: '#E0A93F' },
+  { id: 'gold', label: 'Gold', light: '#A07A28', dark: '#E0A93F' },
   { id: 'green', label: 'Green', light: '#2F6A38', dark: '#7CC687' },
   { id: 'blue', label: 'Blue', light: '#2A5480', dark: '#8FBAE4' },
   { id: 'purple', label: 'Purple', light: '#6B4A96', dark: '#C6A8E8' },
@@ -232,7 +217,7 @@ export function buildPalette(mood: Mood, accentId: AccentId): Palette {
   };
 }
 
-/** 4pt rhythm. */
+/** 4pt rhythm, with a little extra air for the editorial layout. */
 export const spacing = {
   xxs: 2,
   xs: 4,
@@ -245,33 +230,36 @@ export const spacing = {
 } as const;
 
 export const radius = {
-  xs: 3,
-  sm: 6,
-  md: 9,
-  lg: 12,
-  xl: 16,
+  xs: 2,
+  sm: 4,
+  md: 6,
+  lg: 8,
+  xl: 12,
   pill: 999,
 } as const;
 
+/** Comfortably large type — readable on a phone without squinting. */
 export const fontSizes = {
-  xxs: 11,
-  xs: 12,
-  sm: 14,
-  md: 16,
-  lg: 18,
-  xl: 22,
-  xxl: 28,
-  hero: 40,
+  xxs: 13,
+  xs: 14,
+  sm: 16,
+  md: 18,
+  lg: 20,
+  xl: 28,
+  xxl: 36,
+  hero: 44,
 } as const;
 
 /**
- * One typeface, the platform system font, used for everything. Hierarchy
- * comes from size and weight rather than switching families, which is what
- * keeps a plain interface feeling deliberate instead of just unstyled.
+ * Serif display for brand titles and surprise reading; Source Sans for UI
+ * and body. Fallbacks cover the brief before fonts finish loading.
  */
 export const fonts = {
-  display: Platform.select({ ios: 'System', android: 'sans-serif', default: 'System' }),
-  body: Platform.select({ ios: 'System', android: 'sans-serif', default: 'System' }),
+  display: 'PlayfairDisplay_700Bold',
+  displayRegular: 'PlayfairDisplay_400Regular',
+  body: 'SourceSans3_400Regular',
+  bodyMedium: 'SourceSans3_500Medium',
+  bodySemibold: 'SourceSans3_600SemiBold',
   mono: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }),
 } as const;
 
@@ -359,7 +347,8 @@ export type TextRole =
   | 'bodyStrong'
   | 'caption'
   | 'label'
-  | 'mono';
+  | 'mono'
+  | 'display';
 
 export function textStyle(role: TextRole, palette: Palette): TextStyle {
   const base: Record<TextRole, TextStyle> = {
@@ -368,57 +357,67 @@ export function textStyle(role: TextRole, palette: Palette): TextStyle {
       fontSize: fontSizes.hero,
       fontWeight: weights.bold,
       color: palette.ink,
-      lineHeight: 46,
+      lineHeight: 52,
+      letterSpacing: -0.5,
+    },
+    display: {
+      fontFamily: fonts.display,
+      fontSize: fontSizes.xxl,
+      fontWeight: weights.bold,
+      color: palette.ink,
+      lineHeight: 42,
+      letterSpacing: -0.3,
     },
     title: {
       fontFamily: fonts.display,
       fontSize: fontSizes.xl,
       fontWeight: weights.bold,
       color: palette.ink,
-      lineHeight: 29,
+      lineHeight: 34,
     },
     heading: {
-      fontFamily: fonts.display,
+      fontFamily: fonts.bodySemibold,
       fontSize: fontSizes.lg,
-      fontWeight: weights.bold,
+      fontWeight: weights.semibold,
       color: palette.ink,
-      lineHeight: 24,
+      lineHeight: 26,
     },
     body: {
       fontFamily: fonts.body,
       fontSize: fontSizes.md,
       fontWeight: weights.regular,
       color: palette.ink,
-      lineHeight: 24,
+      lineHeight: 28,
     },
     bodyStrong: {
-      fontFamily: fonts.body,
+      fontFamily: fonts.bodySemibold,
       fontSize: fontSizes.md,
       fontWeight: weights.semibold,
       color: palette.ink,
-      lineHeight: 24,
+      lineHeight: 28,
     },
     caption: {
       fontFamily: fonts.body,
       fontSize: fontSizes.sm,
       fontWeight: weights.regular,
       color: palette.inkSoft,
-      lineHeight: 20,
+      lineHeight: 22,
     },
     label: {
-      fontFamily: fonts.body,
+      fontFamily: fonts.bodyMedium,
       fontSize: fontSizes.xs,
-      fontWeight: weights.semibold,
+      fontWeight: weights.medium,
       color: palette.inkSoft,
-      letterSpacing: 0.2,
-      lineHeight: 16,
+      letterSpacing: 1.2,
+      textTransform: 'uppercase',
+      lineHeight: 18,
     },
     mono: {
       fontFamily: fonts.mono,
       fontSize: fontSizes.sm,
       fontWeight: weights.regular,
       color: palette.inkSoft,
-      lineHeight: 20,
+      lineHeight: 22,
     },
   };
   return base[role];

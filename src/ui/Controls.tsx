@@ -70,6 +70,48 @@ export function Chip({ label, active = false, onPress, color, icon, count, acces
   );
 }
 
+/** Underline text tab used for kind filters (All · idea · note · …). */
+export function TextTab({
+  label,
+  active = false,
+  onPress,
+}: {
+  label: string;
+  active?: boolean;
+  onPress: () => void;
+}) {
+  const { palette } = useTheme();
+  const haptics = useHaptics();
+
+  return (
+    <Pressable
+      onPress={() => {
+        haptics.light();
+        onPress();
+      }}
+      hitSlop={HIT_SLOP}
+      accessibilityRole="tab"
+      accessibilityState={{ selected: active }}
+      accessibilityLabel={label}
+      style={({ pressed }) => [styles.textTab, { opacity: pressed ? 0.65 : 1 }]}
+    >
+      <Type
+        role="body"
+        color={active ? palette.ink : palette.inkSoft}
+        style={[styles.textTabLabel, active && styles.textTabLabelActive]}
+      >
+        {label}
+      </Type>
+      <View
+        style={[
+          styles.textTabRule,
+          { backgroundColor: active ? palette.ink : 'transparent' },
+        ]}
+      />
+    </Pressable>
+  );
+}
+
 /* ----------------------------------------------------------- Segmented -- */
 
 export interface SegmentedOption<T extends string> {
@@ -280,6 +322,23 @@ const styles = StyleSheet.create({
   },
   chipCount: {
     fontVariant: ['tabular-nums'],
+  },
+  textTab: {
+    paddingVertical: spacing.sm,
+    paddingRight: spacing.lg,
+    minHeight: MIN_TOUCH,
+    justifyContent: 'center',
+  },
+  textTabLabel: {
+    fontSize: 17,
+  },
+  textTabLabelActive: {
+    fontWeight: '600',
+  },
+  textTabRule: {
+    marginTop: 6,
+    height: 2,
+    alignSelf: 'stretch',
   },
   segment: {
     padding: 3,

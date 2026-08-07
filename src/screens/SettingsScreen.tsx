@@ -27,7 +27,6 @@ import { Button } from '../ui/Button';
 import { ProgressBar, Segmented } from '../ui/Controls';
 import { Field } from '../ui/Field';
 import { Group, Row, SectionHeader } from '../ui/Group';
-import { IconTile } from '../ui/IconTile';
 import { NavBar } from '../ui/NavBar';
 import { Backdrop, Panel } from '../ui/Surface';
 import { Type } from '../ui/Type';
@@ -235,7 +234,7 @@ export default function SettingsScreen({ navigation }: Props) {
 
   return (
     <Backdrop>
-      <NavBar title="Settings" />
+      <NavBar title="Settings" align="start" large borderless />
 
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + spacing.lg }]}
@@ -287,7 +286,6 @@ export default function SettingsScreen({ navigation }: Props) {
             <Row
               title="Vibration"
               subtitle="A small tap when you press things."
-              left={<IconTile icon="pulse-outline" size={32} iconSize={16} />}
               right={
                 <Switch
                   value={settings.hapticsEnabled}
@@ -303,7 +301,7 @@ export default function SettingsScreen({ navigation }: Props) {
 
         <View>
           <SectionHeader
-            title="Assistant"
+            title="Intelligence"
             hint={
               settings.aiEngine === 'remote'
                 ? 'Set to a cloud provider below. Notes run through it leave this phone.'
@@ -312,9 +310,8 @@ export default function SettingsScreen({ navigation }: Props) {
           />
           <Group>
             <Row
-              title="Use the assistant"
-              subtitle="Polish wording, suggest titles and tags."
-              left={<IconTile icon="hardware-chip-outline" size={32} iconSize={16} />}
+              title="Cloud AI"
+              subtitle="Groq, OpenRouter, Gemini, or self-hosted"
               right={
                 <Switch
                   value={settings.aiEnabled}
@@ -348,7 +345,6 @@ export default function SettingsScreen({ navigation }: Props) {
                     ? decodeURIComponent(settings.selectedModelPath.split('/').pop() ?? '')
                     : 'None chosen yet'
                 }
-                left={<IconTile icon="cube-outline" size={32} iconSize={16} />}
                 onPress={() => navigation.navigate('Models')}
                 accessibilityHint="Choose, download or remove an assistant model"
               />
@@ -371,6 +367,21 @@ export default function SettingsScreen({ navigation }: Props) {
               title="Voice input"
               hint="Dictate instead of typing. The offline pack never leaves this phone; the phone's own recognizer is more accurate but is not offline."
             />
+            <Group>
+              <Row
+                title="System voice recognition"
+                subtitle="Uses your device's built-in service"
+                right={
+                  <Switch
+                    value={settings.voiceProvider === 'android'}
+                    onValueChange={(value) => settings.set('voiceProvider', value ? 'android' : 'vosk')}
+                    trackColor={{ false: palette.switchOff, true: palette.accent }}
+                    thumbColor="#FFFFFF"
+                    accessibilityLabel="System voice recognition"
+                  />
+                }
+              />
+            </Group>
             <Segmented
               options={VOICE_OPTIONS}
               value={settings.voiceProvider}
@@ -384,7 +395,6 @@ export default function SettingsScreen({ navigation }: Props) {
                   {speechProgress !== null ? (
                     <Row
                       title="Downloading speech pack"
-                      left={<IconTile icon="cloud-download-outline" size={32} iconSize={16} />}
                       right={null}
                       subtitle={`${Math.round(speechProgress * 100)}% done`}
                       chevron={false}
@@ -396,14 +406,6 @@ export default function SettingsScreen({ navigation }: Props) {
                         speechReady
                           ? 'Dictation is ready to use. Fully offline.'
                           : `About ${SPEECH_MODEL_SIZE_LABEL}, downloaded once. Fully offline.`
-                      }
-                      left={
-                        <IconTile
-                          icon={speechReady ? 'checkmark-circle' : 'mic-outline'}
-                          size={32}
-                          iconSize={16}
-                          tint={speechReady ? undefined : palette.inkSoft}
-                        />
                       }
                       right={
                         speechReady ? (
@@ -429,14 +431,6 @@ export default function SettingsScreen({ navigation }: Props) {
                     androidSpeechReady
                       ? 'Uses whatever speech service is installed, usually the Google app. Audio leaves this phone to be transcribed.'
                       : "This phone doesn't have a speech recognition service installed. Switch back to the offline pack."
-                  }
-                  left={
-                    <IconTile
-                      icon={androidSpeechReady ? 'checkmark-circle' : 'alert-circle-outline'}
-                      size={32}
-                      iconSize={16}
-                      tint={androidSpeechReady ? undefined : palette.danger}
-                    />
                   }
                   chevron={false}
                 />
@@ -487,7 +481,6 @@ export default function SettingsScreen({ navigation }: Props) {
                     key={category.id}
                     title={category.name}
                     subtitle={subtitle}
-                    left={<IconTile icon="folder-outline" size={32} iconSize={16} />}
                     onPress={() => {
                       setEditingId(category.id);
                       setEditingName(category.name);
@@ -533,9 +526,13 @@ export default function SettingsScreen({ navigation }: Props) {
           <SectionHeader title="Working through your box" />
           <Group>
             <Row
+              title="Stats"
+              subtitle="Streaks, counts and what you have rediscovered."
+              onPress={() => navigation.navigate('Stats')}
+            />
+            <Row
               title="Weekly review"
               subtitle="Work through a few things you have not seen in a while."
-              left={<IconTile icon="checkmark-done-outline" size={32} iconSize={16} />}
               onPress={() => navigation.navigate('Review')}
             />
             <Row
@@ -545,25 +542,27 @@ export default function SettingsScreen({ navigation }: Props) {
                   ? `Suggest tags for ${untaggedCount} untagged ${untaggedCount === 1 ? 'entry' : 'entries'}.`
                   : 'Everything already has at least one tag.'
               }
-              left={<IconTile icon="sparkles-outline" size={32} iconSize={16} />}
               onPress={() => navigation.navigate('Tidy')}
             />
           </Group>
         </View>
 
         <View>
-          <SectionHeader title="Your data" />
+          <SectionHeader title="Data" />
           <Group>
             <Row
-              title="Backup and restore"
+              title="Export as encrypted JSON"
               subtitle="Save a copy, or move your entries to another phone."
-              left={<IconTile icon="save-outline" size={32} iconSize={16} />}
+              onPress={() => navigation.navigate('Backup')}
+            />
+            <Row
+              title="Backup and restore"
+              subtitle="Backups use AES-256-CBC + HMAC-SHA256. Restore merges, never overwrites."
               onPress={() => navigation.navigate('Backup')}
             />
             <Row
               title="Delete everything"
               subtitle={`${entries.length} ${entries.length === 1 ? 'entry' : 'entries'} on this phone`}
-              left={<IconTile icon="trash-outline" size={32} iconSize={16} tint={palette.danger} />}
               destructive
               onPress={confirmEraseEverything}
               chevron={false}
@@ -571,14 +570,12 @@ export default function SettingsScreen({ navigation }: Props) {
           </Group>
         </View>
 
-        <Panel style={styles.about} borderRadius={radii.lg}>
-          <Ionicons name="lock-closed-outline" size={18} color={palette.inkFaint} />
+        <View style={styles.about}>
           <Type role="caption" style={styles.aboutText}>
-            Trovelo has no account and no server. Your entries, the assistant and voice input all
-            stay on this phone by default. Nothing leaves unless you turn on a cloud assistant or the
-            phone's own speech recognizer above, both optional, or share a backup file yourself.
+            Everything stays on your device. No account, no telemetry. Network traffic is only model
+            downloads, both user-initiated. Trovelo has no account and no server.
           </Type>
-        </Panel>
+        </View>
       </ScrollView>
     </Backdrop>
   );
@@ -586,7 +583,8 @@ export default function SettingsScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   content: {
-    padding: spacing.lg,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.md,
     gap: spacing.xl,
   },
   accentRow: {
@@ -633,13 +631,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   about: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.md,
-    padding: spacing.lg,
+    paddingVertical: spacing.md,
   },
   aboutText: {
-    flex: 1,
-    lineHeight: 20,
+    lineHeight: 22,
   },
 });

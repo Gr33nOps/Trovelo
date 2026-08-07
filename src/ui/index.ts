@@ -1,6 +1,6 @@
 export { Button } from './Button';
 export type { ButtonProps, ButtonSize, ButtonVariant } from './Button';
-export { Badge, Chip, IconButton, ProgressBar, Segmented } from './Controls';
+export { Badge, Chip, IconButton, ProgressBar, Segmented, TextTab } from './Controls';
 export type { ChipProps, SegmentedOption } from './Controls';
 export { EmptyState } from './EmptyState';
 export { Field } from './Field';

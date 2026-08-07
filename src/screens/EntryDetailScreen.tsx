@@ -19,7 +19,7 @@ import { AiTaskId } from '../services/ai';
 import { Button } from '../ui/Button';
 import { Field } from '../ui/Field';
 import { EmptyState } from '../ui/EmptyState';
-import { NavAction, NavBar } from '../ui/NavBar';
+import { NavAction, NavBar, NavTextAction } from '../ui/NavBar';
 import { Backdrop, Panel, Rule } from '../ui/Surface';
 import { Type } from '../ui/Type';
 import { formatDate, formatRelativeDay } from '../utils/date';
@@ -157,6 +157,7 @@ export default function EntryDetailScreen({ navigation, route }: Props) {
       <NavBar
         title={kindConfig.label}
         onBack={() => navigation.goBack()}
+        borderless
         right={
           <>
             <NavAction
@@ -168,9 +169,8 @@ export default function EntryDetailScreen({ navigation, route }: Props) {
               }}
             />
             <NavAction icon="ellipsis-horizontal" label="More actions" onPress={showMoreActions} />
-            <NavAction
-              icon="create-outline"
-              label={`Edit this ${kindConfig.label.toLowerCase()}`}
+            <NavTextAction
+              label="Edit"
               onPress={() => navigation.navigate('EntryEdit', { entryId: entry.id })}
             />
           </>
@@ -181,14 +181,17 @@ export default function EntryDetailScreen({ navigation, route }: Props) {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xxl }]}
         showsVerticalScrollIndicator={false}
       >
-        <Panel style={styles.card} borderRadius={radii.xl}>
+        <View style={styles.card}>
+          <Type role="label" color={palette.inkFaint}>
+            {kindConfig.label}
+          </Type>
           {entry.title ? (
             <Type role="title" pressed>
               {entry.title}
             </Type>
           ) : null}
 
-          <Type role="body" style={styles.body} selectable>
+          <Type role="title" style={styles.body} selectable>
             {entry.text}
           </Type>
 
@@ -260,7 +263,7 @@ export default function EntryDetailScreen({ navigation, route }: Props) {
               </Type>
             </View>
           </View>
-        </Panel>
+        </View>
 
         <Panel style={styles.card} borderRadius={radii.lg}>
           <View style={styles.statusHeader}>
@@ -409,15 +412,17 @@ export default function EntryDetailScreen({ navigation, route }: Props) {
 
 const styles = StyleSheet.create({
   content: {
-    padding: spacing.lg,
-    gap: spacing.md,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.md,
+    gap: spacing.lg,
   },
   card: {
-    padding: spacing.lg,
+    paddingVertical: spacing.md,
     gap: spacing.md,
   },
   body: {
-    lineHeight: 26,
+    fontWeight: '400',
+    lineHeight: 36,
   },
   tags: {
     flexDirection: 'row',

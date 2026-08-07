@@ -3,15 +3,11 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { KIND_CONFIG } from '../constants/kinds';
-import { HIT_SLOP, radius as radii, spacing, withAlpha } from '../constants/theme';
+import { HIT_SLOP, fonts, fontSizes, spacing, weights } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { Entry } from '../types';
-import { formatDueLabel, formatRelativeDay } from '../utils/date';
-import { IconTile } from '../ui/IconTile';
-import { Panel } from '../ui/Surface';
+import { formatDueLabel, formatShortRelative } from '../utils/date';
 import { Type } from '../ui/Type';
-import { displayTag } from '../utils/tags';
-import { StatusBadge } from './StatusBadge';
 
 interface Props {
   entry: Entry;
@@ -23,11 +19,8 @@ interface Props {
 }
 
 /**
- * One index card in the library list.
- *
- * Memoised on the fields it actually draws: the list re-renders on every
- * change to any entry, and without this each keystroke in the search box
- * re-rendered every visible card.
+ * Editorial list row: kind + relative time on top, body below, hairline below.
+ * No card chrome — the list itself is the surface.
  */
 export const EntryCard = memo(
   function EntryCard({ entry, folderName, onPress, onLongPress, onToggleDone }: Props) {
@@ -37,6 +30,7 @@ export const EntryCard = memo(
     const isTask = kind === 'task';
     const done = entry.status === 'done';
     const overdue = isTask && !done && !!entry.dueAt && entry.dueAt < Date.now();
+    const display = entry.title ? `${entry.title} — ${preview}` : preview;
 
     return (
       <Pressable
@@ -45,10 +39,10 @@ export const EntryCard = memo(
         accessibilityRole="button"
         accessibilityLabel={entry.title ?? preview.slice(0, 80)}
         accessibilityHint="Opens this entry"
-        style={({ pressed }) => [pressed && styles.pressed]}
+        style={({ pressed }) => [styles.row, pressed && styles.pressed]}
       >
-        <Panel style={styles.card} borderRadius={radii.lg}>
-          <View style={styles.header}>
+        <View style={styles.meta}>
+          <View style={styles.metaLeft}>
             {isTask ? (
               <Pressable
                 onPress={onToggleDone}
@@ -64,96 +58,37 @@ export const EntryCard = memo(
                   color={done ? palette.accent : palette.inkFaint}
                 />
               </Pressable>
-            ) : (
-              <IconTile icon={KIND_CONFIG[kind].icon} size={34} iconSize={17} />
-            )}
-            <View style={styles.headerText}>
-              {entry.title ? (
-                <Type
-                  role="bodyStrong"
-                  numberOfLines={1}
-                  pressed
-                  style={done ? styles.doneText : undefined}
-                  color={done ? palette.inkFaint : undefined}
-                >
-                  {entry.title}
-                </Type>
-              ) : null}
-              <Type
-                role={entry.title ? 'caption' : 'body'}
-                numberOfLines={entry.title ? 2 : 3}
-                color={done ? palette.inkFaint : entry.title ? palette.inkSoft : palette.ink}
-                style={done ? styles.doneText : undefined}
-              >
-                {preview}
-              </Type>
-            </View>
-            {entry.isPinned ? (
-              <Ionicons name="bookmark" size={15} color={palette.accent} style={styles.star} />
             ) : null}
-            {entry.isFavorite ? (
-              <Ionicons
-                name="star"
-                size={16}
-                color={palette.accent}
-                accessibilityLabel="Favourite"
-                style={styles.star}
-              />
-            ) : null}
-            <Ionicons name="chevron-forward" size={15} color={palette.inkFaint} style={styles.chevron} />
+            <Type role="label" color={palette.inkFaint} style={styles.kind}>
+              {KIND_CONFIG[kind].label}
+            </Type>
+            {entry.isPinned ? <Ionicons name="bookmark" size={14} color={palette.accent} /> : null}
+            {entry.isFavorite ? <Ionicons name="star" size={14} color={palette.accent} /> : null}
           </View>
+          <Type role="label" color={palette.inkFaint} style={styles.when}>
+            {formatShortRelative(entry.createdAt)}
+          </Type>
+        </View>
 
-          {isTask && entry.dueAt && !done ? (
-            <View
-              style={[
-                styles.dueBadge,
-                {
-                  borderRadius: radii.pill,
-                  backgroundColor: withAlpha(overdue ? palette.danger : palette.accent, 0.14),
-                },
-              ]}
-            >
-              <Ionicons name="time-outline" size={12} color={overdue ? palette.danger : palette.accent} />
-              <Type role="caption" color={overdue ? palette.danger : palette.accent} style={styles.dueLabel}>
-                {formatDueLabel(entry.dueAt)}
-              </Type>
-            </View>
-          ) : null}
+        <Type
+          role="body"
+          numberOfLines={4}
+          color={done ? palette.inkFaint : palette.ink}
+          style={[styles.body, done && styles.doneText]}
+        >
+          {display}
+        </Type>
 
-          {entry.tags.length > 0 ? (
-            <View style={styles.tags}>
-              {entry.tags.slice(0, 3).map((tag) => (
-                <Type key={tag} role="caption" color={palette.inkFaint} style={styles.tag}>
-                  #{displayTag(tag)}
-                </Type>
-              ))}
-              {entry.tags.length > 3 ? (
-                <Type role="caption" color={palette.inkFaint} style={styles.tag}>
-                  +{entry.tags.length - 3}
-                </Type>
-              ) : null}
-            </View>
-          ) : null}
-
-          <View style={styles.footer}>
-            <View style={styles.meta}>
-              <Type role="caption" color={palette.inkFaint} style={styles.date}>
-                {formatRelativeDay(entry.createdAt)}
-              </Type>
-              {folderName ? (
-                <>
-                  <Type role="caption" color={palette.inkFaint} style={styles.dot}>
-                    ·
-                  </Type>
-                  <Type role="caption" color={palette.inkFaint} numberOfLines={1} style={styles.folder}>
-                    {folderName}
-                  </Type>
-                </>
-              ) : null}
-            </View>
-            <StatusBadge status={entry.status} compact />
-          </View>
-        </Panel>
+        {isTask && entry.dueAt && !done ? (
+          <Type role="caption" color={overdue ? palette.danger : palette.inkFaint} style={styles.due}>
+            {formatDueLabel(entry.dueAt)}
+            {folderName ? ` · ${folderName}` : ''}
+          </Type>
+        ) : folderName ? (
+          <Type role="caption" color={palette.inkFaint} style={styles.due}>
+            {folderName}
+          </Type>
+        ) : null}
       </Pressable>
     );
   },
@@ -175,76 +110,47 @@ export const EntryCard = memo(
 );
 
 const styles = StyleSheet.create({
-  card: {
-    padding: spacing.md,
+  row: {
+    paddingVertical: spacing.xl,
     gap: spacing.sm,
   },
   pressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.99 }],
+    opacity: 0.7,
   },
-  header: {
+  meta: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  metaLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.sm,
-  },
-  headerText: {
-    flex: 1,
-    gap: 2,
-    paddingTop: 2,
-  },
-  star: {
-    marginTop: 2,
-  },
-  chevron: {
-    marginTop: 3,
+    flexShrink: 1,
   },
   checkbox: {
-    marginTop: 1,
+    marginRight: 2,
+  },
+  kind: {
+    letterSpacing: 1.4,
+  },
+  when: {
+    letterSpacing: 0.8,
+    textTransform: 'none',
+    fontFamily: fonts.body,
+    fontWeight: weights.regular,
+    fontSize: fontSizes.xs,
+  },
+  body: {
+    fontFamily: fonts.body,
+    fontSize: fontSizes.md,
+    lineHeight: 28,
   },
   doneText: {
     textDecorationLine: 'line-through',
   },
-  dueBadge: {
-    flexDirection: 'row',
-    alignSelf: 'flex-start',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-  },
-  dueLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  tags: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  tag: {
-    fontSize: 12,
-  },
-  footer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
-  meta: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  date: {
-    fontSize: 12,
-  },
-  dot: {
-    fontSize: 12,
-  },
-  folder: {
-    fontSize: 12,
-    flexShrink: 1,
+  due: {
+    marginTop: 2,
   },
 });

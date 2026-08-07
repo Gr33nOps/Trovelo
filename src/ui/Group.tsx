@@ -40,6 +40,7 @@ export function SectionHeader({
  * A grouped list: one card, hairline rules between children, rounded ends.
  * Children are separated automatically so callers never hand-place dividers.
  */
+/** A grouped list with soft hairlines between children. */
 export function Group({
   children,
   style,
@@ -51,10 +52,8 @@ export function Group({
 }) {
   const items = Children.toArray(children).filter(isValidElement);
   return (
-    <Panel style={style} borderRadius={radii.lg}>
+    <Panel style={style} borderRadius={radii.lg} borderColor="transparent">
       {items.map((child, index) => (
-        // Children.toArray assigns stable keys, so rows keep their identity
-        // when the list they came from is reordered.
         <Fragment key={child.key ?? index}>
           {index > 0 ? <Rule inset={inset} /> : null}
           {child}

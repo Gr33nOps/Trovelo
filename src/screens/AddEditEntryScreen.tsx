@@ -30,10 +30,10 @@ import { AiTaskId } from '../services/ai';
 import { SPEECH_MODEL_SIZE_LABEL } from '../services/speech';
 import { EntryKind, EntryStatus } from '../types';
 import { Button } from '../ui/Button';
-import { Chip, Segmented } from '../ui/Controls';
+import { Chip, TextTab } from '../ui/Controls';
 import { Field } from '../ui/Field';
-import { NavAction, NavBar } from '../ui/NavBar';
-import { Backdrop, Panel, Rule } from '../ui/Surface';
+import { NavBar, NavTextAction } from '../ui/NavBar';
+import { Backdrop } from '../ui/Surface';
 import { Type } from '../ui/Type';
 import { addTag, matchKnownTags, parseTags } from '../utils/tags';
 
@@ -221,16 +221,12 @@ export default function AddEditEntryScreen({ navigation, route }: Props) {
   return (
     <Backdrop>
       <NavBar
-        title={existing ? `Edit ${kindConfig.label.toLowerCase()}` : `New ${kindConfig.label.toLowerCase()}`}
+        title={existing ? `Edit ${kindConfig.label.toLowerCase()}` : ''}
         onBack={() => navigation.goBack()}
         backLabel="Cancel"
+        borderless
         right={
-          <NavAction
-            icon="checkmark"
-            label="Save"
-            disabled={!canSave}
-            onPress={handleSave}
-          />
+          <NavTextAction label="Save" onPress={handleSave} disabled={!canSave} accent />
         }
       />
 
@@ -245,80 +241,80 @@ export default function AddEditEntryScreen({ navigation, route }: Props) {
           keyboardDismissMode="interactive"
           showsVerticalScrollIndicator={false}
         >
-          <Segmented
-            options={KIND_ORDER.map((option) => ({
-              value: option,
-              label: KIND_CONFIG[option].pickerLabel,
-              icon: KIND_CONFIG[option].icon,
-            }))}
-            value={kind}
-            onChange={setKind}
-            accessibilityLabel="Kind"
+          <View style={styles.kindTabs} accessibilityRole="tablist">
+            {KIND_ORDER.map((option) => (
+              <TextTab
+                key={option}
+                label={KIND_CONFIG[option].pickerLabel}
+                active={kind === option}
+                onPress={() => setKind(option)}
+              />
+            ))}
+          </View>
+
+          <Field
+            value={title}
+            onChangeText={setTitle}
+            placeholder="Title (optional)"
+            maxLength={MAX_TITLE_LENGTH}
+            returnKeyType="next"
+            variant="plain"
+            containerStyle={styles.titleField}
           />
 
-          <Panel style={styles.card} borderRadius={radii.lg}>
-            <Field
-              label="Title (optional)"
-              value={title}
-              onChangeText={setTitle}
-              placeholder="Title"
-              maxLength={MAX_TITLE_LENGTH}
-              returnKeyType="next"
-            />
+          <Field
+            value={text}
+            onChangeText={setText}
+            placeholder={kindConfig.placeholder}
+            multiline
+            maxLength={MAX_TEXT_LENGTH}
+            showCounter
+            variant="plain"
+            hint={dictation.listening ? 'Listening, speak now' : undefined}
+            inputStyle={styles.textArea}
+            containerStyle={styles.bodyField}
+          />
 
-            <Field
-              label={kindConfig.fieldLabel}
-              value={text}
-              onChangeText={setText}
-              placeholder={kindConfig.placeholder}
-              multiline
-              maxLength={MAX_TEXT_LENGTH}
-              showCounter
-              hint={dictation.listening ? 'Listening, speak now' : undefined}
-              inputStyle={styles.textArea}
-            />
-
-            {dictation.supported ? (
-              <View style={styles.dictationRow}>
-                <Button
-                  label={dictation.starting ? 'Starting…' : dictation.listening ? 'Stop listening' : 'Dictate'}
-                  onPress={() => void dictation.toggle(text)}
-                  variant={dictation.listening ? 'primary' : 'secondary'}
-                  size="sm"
-                  disabled={ai.running || dictation.starting}
-                  loading={dictation.starting}
-                  icon={
-                    <Ionicons
-                      name={dictation.listening ? 'stop-circle' : 'mic-outline'}
-                      size={15}
-                      color={dictation.listening ? palette.accentInk : palette.ink}
-                    />
-                  }
-                />
-                {dictation.listening ? (
-                  <View
-                    style={[
-                      styles.listening,
-                      { borderRadius: radii.pill, backgroundColor: withAlpha(palette.accent, 0.16) },
-                    ]}
-                  >
-                    <Ionicons name="radio-button-on" size={11} color={palette.accent} />
-                    <Type role="caption" color={palette.accent} numberOfLines={1} style={styles.listeningText}>
-                      {dictation.partial || 'Listening…'}
-                    </Type>
-                  </View>
-                ) : null}
-              </View>
-            ) : null}
-          </Panel>
+          {dictation.supported ? (
+            <View style={styles.dictationRow}>
+              <Button
+                label={dictation.starting ? 'Starting…' : dictation.listening ? 'Stop listening' : 'Dictate'}
+                onPress={() => void dictation.toggle(text)}
+                variant={dictation.listening ? 'primary' : 'secondary'}
+                size="sm"
+                disabled={ai.running || dictation.starting}
+                loading={dictation.starting}
+                icon={
+                  <Ionicons
+                    name={dictation.listening ? 'stop-circle' : 'mic-outline'}
+                    size={15}
+                    color={dictation.listening ? palette.accentInk : palette.ink}
+                  />
+                }
+              />
+              {dictation.listening ? (
+                <View
+                  style={[
+                    styles.listening,
+                    { borderRadius: radii.pill, backgroundColor: withAlpha(palette.accent, 0.16) },
+                  ]}
+                >
+                  <Ionicons name="radio-button-on" size={11} color={palette.accent} />
+                  <Type role="caption" color={palette.accent} numberOfLines={1} style={styles.listeningText}>
+                    {dictation.partial || 'Listening…'}
+                  </Type>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
 
           {kind === 'task' ? (
-            <Panel style={styles.card} borderRadius={radii.lg}>
+            <View style={styles.section}>
               <Type role="label" pressed>
                 Due date
               </Type>
               <DatePicker value={dueAt} onChange={setDueAt} />
-            </Panel>
+            </View>
           ) : null}
 
           <View style={styles.section}>
@@ -344,69 +340,63 @@ export default function AddEditEntryScreen({ navigation, route }: Props) {
             />
           </View>
 
-          <Panel style={styles.card} borderRadius={radii.lg}>
-            <View style={styles.detailBlock}>
-              <Type role="label" pressed>
-                Tags
-              </Type>
-              <TagInput value={tags} onChange={setTags} suggestions={knownTags.map((item) => item.tag)} />
-            </View>
+          <View style={styles.detailBlock}>
+            <Type role="label" pressed>
+              Tags
+            </Type>
+            <TagInput value={tags} onChange={setTags} suggestions={knownTags.map((item) => item.tag)} />
+          </View>
 
-            <Rule />
+          <View style={styles.detailBlock}>
+            <Type role="label" pressed>
+              Status
+            </Type>
+            <StatusPicker value={status} onChange={setStatus} />
+          </View>
 
-            <View style={styles.detailBlock}>
-              <Type role="label" pressed>
-                Status
-              </Type>
-              <StatusPicker value={status} onChange={setStatus} />
-            </View>
-
-            <Rule />
-
-            <View style={styles.detailBlock}>
-              <Type role="label" pressed>
-                Folder
-              </Type>
-              <View style={styles.chipRow}>
-                <Chip label="None" active={!categoryId} onPress={() => setCategoryId(undefined)} />
-                {categories.map((category) => (
-                  <Chip
-                    key={category.id}
-                    label={category.name}
-                    active={categoryId === category.id}
-                    onPress={() => setCategoryId(category.id)}
-                  />
-                ))}
+          <View style={styles.detailBlock}>
+            <Type role="label" pressed>
+              Folder
+            </Type>
+            <View style={styles.chipRow}>
+              <Chip label="None" active={!categoryId} onPress={() => setCategoryId(undefined)} />
+              {categories.map((category) => (
                 <Chip
-                  label={showNewFolder ? 'Cancel' : 'New folder'}
-                  active={false}
-                  onPress={() => setShowNewFolder((open) => !open)}
+                  key={category.id}
+                  label={category.name}
+                  active={categoryId === category.id}
+                  onPress={() => setCategoryId(category.id)}
+                />
+              ))}
+              <Chip
+                label={showNewFolder ? 'Cancel' : 'New folder'}
+                active={false}
+                onPress={() => setShowNewFolder((open) => !open)}
+              />
+            </View>
+
+            {showNewFolder ? (
+              <View style={styles.newFolderRow}>
+                <Field
+                  value={newFolder}
+                  onChangeText={setNewFolder}
+                  placeholder="Folder name"
+                  maxLength={40}
+                  returnKeyType="done"
+                  onSubmitEditing={createFolder}
+                  containerStyle={styles.grow}
+                  accessibilityLabel="New folder name"
+                />
+                <Button
+                  label="Create"
+                  size="md"
+                  variant="primary"
+                  disabled={newFolder.trim().length === 0}
+                  onPress={createFolder}
                 />
               </View>
-
-              {showNewFolder ? (
-                <View style={styles.newFolderRow}>
-                  <Field
-                    value={newFolder}
-                    onChangeText={setNewFolder}
-                    placeholder="Folder name"
-                    maxLength={40}
-                    returnKeyType="done"
-                    onSubmitEditing={createFolder}
-                    containerStyle={styles.grow}
-                    accessibilityLabel="New folder name"
-                  />
-                  <Button
-                    label="Create"
-                    size="md"
-                    variant="primary"
-                    disabled={newFolder.trim().length === 0}
-                    onPress={createFolder}
-                  />
-                </View>
-              ) : null}
-            </View>
-          </Panel>
+            ) : null}
+          </View>
 
           <Button
             label={existing ? 'Save changes' : kindConfig.saveLabel}
@@ -428,18 +418,28 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: spacing.lg,
-    gap: spacing.md,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.md,
+    gap: spacing.lg,
   },
-  card: {
-    padding: spacing.lg,
-    gap: spacing.md,
+  kindTabs: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'flex-end',
+  },
+  titleField: {
+    marginTop: spacing.sm,
+  },
+  bodyField: {
+    marginTop: -spacing.sm,
   },
   detailBlock: {
     gap: spacing.sm,
   },
   textArea: {
-    minHeight: 160,
+    minHeight: 220,
+    fontSize: 19,
+    lineHeight: 30,
   },
   dictationRow: {
     flexDirection: 'row',
@@ -456,7 +456,7 @@ const styles = StyleSheet.create({
   },
   listeningText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: 14,
   },
   section: {
     gap: spacing.sm,

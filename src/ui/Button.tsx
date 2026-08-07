@@ -24,7 +24,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useHaptics } from '../hooks/useHaptics';
 import { Type } from './Type';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'plain';
+export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'plain' | 'outline';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 export interface ButtonProps extends Pick<AccessibilityProps, 'accessibilityHint'> {
@@ -46,8 +46,8 @@ export interface ButtonProps extends Pick<AccessibilityProps, 'accessibilityHint
   testID?: string;
 }
 
-const HEIGHTS: Record<ButtonSize, number> = { sm: 34, md: MIN_TOUCH, lg: 52 };
-const FONT: Record<ButtonSize, number> = { sm: fontSizes.sm, md: fontSizes.md, lg: fontSizes.md };
+const HEIGHTS: Record<ButtonSize, number> = { sm: 36, md: 48, lg: 56 };
+const FONT: Record<ButtonSize, number> = { sm: fontSizes.sm, md: fontSizes.md, lg: fontSizes.lg };
 
 /** A flat fill: both gradient stops are the tint itself. */
 function tintGradient(tint: string): Gradient {
@@ -103,6 +103,13 @@ function skinFor(variant: ButtonVariant, palette: Palette, tint?: string): Skin 
         gradient: palette.panelGradient,
         ink: palette.ink,
         border: palette.edgeStrong,
+        bordered: true,
+      };
+    case 'outline':
+      return {
+        gradient: { colors: ['transparent', 'transparent'] },
+        ink: palette.accent,
+        border: palette.accent,
         bordered: true,
       };
     case 'plain':
@@ -196,7 +203,7 @@ export function Button({
           {
             height,
             borderRadius: radii.md,
-            borderWidth: skin.bordered ? StyleSheet.hairlineWidth : 0,
+            borderWidth: skin.bordered ? (variant === 'outline' ? 1.5 : StyleSheet.hairlineWidth) : 0,
             borderColor: disabled ? palette.edge : skin.border,
             opacity: disabled ? 0.55 : 1,
           },
@@ -236,7 +243,12 @@ export function Button({
             pressed={variant !== 'plain'}
             onAccent={variant === 'primary' || variant === 'danger' || !!tint}
             numberOfLines={1}
-            style={{ fontSize: FONT[size], fontWeight: weights.semibold, lineHeight: undefined }}
+            style={{
+              fontSize: FONT[size],
+              fontWeight: weights.semibold,
+              lineHeight: undefined,
+              letterSpacing: variant === 'outline' ? 1.5 : undefined,
+            }}
           >
             {label}
           </Type>

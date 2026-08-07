@@ -1,80 +1,148 @@
 import React from 'react';
-import { StyleSheet } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { fontSizes, fonts, weights } from '../constants/theme';
+import { fonts, fontSizes, spacing, weights } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
+import { useHaptics } from '../hooks/useHaptics';
 import HomeScreen from '../screens/HomeScreen';
 import LibraryScreen from '../screens/LibraryScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import StatsScreen from '../screens/StatsScreen';
+import { Type } from '../ui/Type';
 import { EntryKind } from '../types';
 
 export type MainTabParamList = {
-  Home: undefined;
   Library: { tag?: string; kind?: EntryKind } | undefined;
+  Home: undefined;
+  New: undefined;
   Stats: undefined;
   Settings: undefined;
 };
 
-const TAB_ICONS: Record<
-  keyof MainTabParamList,
-  { active: keyof typeof Ionicons.glyphMap; inactive: keyof typeof Ionicons.glyphMap; label: string }
-> = {
-  Home: { active: 'home', inactive: 'home-outline', label: 'Home' },
-  Library: { active: 'albums', inactive: 'albums-outline', label: 'Library' },
-  Stats: { active: 'stats-chart', inactive: 'stats-chart-outline', label: 'Stats' },
-  Settings: { active: 'settings', inactive: 'settings-outline', label: 'Settings' },
-};
-
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
+/** Blank stand-in; the New tab never stays focused — it opens EntryEdit. */
+function NewPlaceholder() {
+  return <View style={{ flex: 1 }} />;
+}
+
 /**
- * The app's four main sections, always one tap away. Before this, Home was
- * the only screen with a persistent presence and everything else (Library,
- * Stats, Settings) was buried behind a stack push, which made sense when
- * the app was only "one box you shake." It stopped making sense once the
- * app also does notes, tasks, journalling and search.
+ * Text-only bottom bar matching the editorial layout:
+ * Trovelo · Surprise · + New · Settings
  *
- * Entry detail, editing, and the one-off tools (model management, backup,
- * review, tidy) stay outside this navigator, as plain stack screens pushed
- * on top, which is what hides the tab bar while one of them is open.
+ * Stats stays in the navigator (hidden from the bar) so Settings can still
+ * open it without dropping the feature.
  */
 export function MainTabs() {
   const { palette } = useTheme();
+  const insets = useSafeAreaInsets();
+  const haptics = useHaptics();
 
   return (
     <Tab.Navigator
-      screenOptions={({ route }) => {
-        const icons = TAB_ICONS[route.name];
-        return {
-          headerShown: false,
-          tabBarActiveTintColor: palette.accent,
-          tabBarInactiveTintColor: palette.inkFaint,
-          tabBarLabel: icons.label,
-          tabBarIcon: ({ focused, color, size }) => (
-            <Ionicons name={focused ? icons.active : icons.inactive} size={size} color={color} />
-          ),
-          tabBarLabelStyle: {
-            fontFamily: fonts.body,
-            fontSize: fontSizes.xxs,
-            fontWeight: weights.semibold,
-          },
-          tabBarStyle: {
-            backgroundColor: palette.chromeGradient.colors[0],
-            borderTopColor: palette.chromeBorder,
-            borderTopWidth: StyleSheet.hairlineWidth,
-            elevation: 0,
-            shadowOpacity: 0,
-          },
-        };
+      initialRouteName="Library"
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: palette.ink,
+        tabBarInactiveTintColor: palette.inkSoft,
+        tabBarStyle: {
+          backgroundColor: palette.chromeGradient.colors[0],
+          borderTopColor: palette.chromeBorder,
+          borderTopWidth: StyleSheet.hairlineWidth,
+          elevation: 0,
+          shadowOpacity: 0,
+          height: 56 + insets.bottom,
+          paddingBottom: insets.bottom,
+          paddingTop: spacing.sm,
+        },
+        tabBarLabelStyle: {
+          fontFamily: fonts.body,
+          fontSize: fontSizes.sm,
+          fontWeight: weights.regular,
+        },
+        tabBarIcon: () => null,
+        tabBarShowLabel: true,
       }}
     >
-      <Tab.Screen name="Home" component={HomeScreen} />
-      <Tab.Screen name="Library" component={LibraryScreen} />
-      <Tab.Screen name="Stats" component={StatsScreen} />
-      <Tab.Screen name="Settings" component={SettingsScreen} />
+      <Tab.Screen
+        name="Library"
+        component={LibraryScreen}
+        options={{
+          tabBarLabel: ({ color, focused }) => (
+            <TabLabel label="Trovelo" color={color} focused={focused} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Home"
+        component={HomeScreen}
+        options={{
+          tabBarLabel: ({ color, focused }) => (
+            <TabLabel label="Surprise" color={color} focused={focused} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="New"
+        component={NewPlaceholder}
+        listeners={({ navigation }) => ({
+          tabPress: (event) => {
+            event.preventDefault();
+            haptics.light();
+            navigation.getParent()?.navigate('EntryEdit');
+          },
+        })}
+        options={{
+          tabBarLabel: ({ color, focused }) => (
+            <TabLabel label="+ New" color={color} focused={focused} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Settings"
+        component={SettingsScreen}
+        options={{
+          tabBarLabel: ({ color, focused }) => (
+            <TabLabel label="Settings" color={color} focused={focused} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Stats"
+        component={StatsScreen}
+        options={{
+          tabBarButton: () => null,
+          tabBarItemStyle: { display: 'none' },
+        }}
+      />
     </Tab.Navigator>
   );
 }
+
+function TabLabel({ label, color, focused }: { label: string; color: string; focused: boolean }) {
+  return (
+    <Type
+      role="body"
+      color={color}
+      numberOfLines={1}
+      style={[styles.tabLabel, focused && styles.tabLabelFocused]}
+    >
+      {label}
+    </Type>
+  );
+}
+
+const styles = StyleSheet.create({
+  tabLabel: {
+    fontFamily: fonts.body,
+    fontSize: fontSizes.sm,
+    fontWeight: weights.regular,
+    textAlign: 'center',
+  },
+  tabLabelFocused: {
+    fontFamily: fonts.bodySemibold,
+    fontWeight: weights.semibold,
+  },
+});

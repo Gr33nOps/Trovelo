@@ -19,16 +19,16 @@ export interface KindConfig {
 export const KIND_CONFIG: Record<EntryKind, KindConfig> = {
   idea: {
     label: 'Idea',
-    pickerLabel: 'Idea',
+    pickerLabel: 'idea',
     icon: 'bulb-outline',
     fieldLabel: 'The idea',
-    placeholder: 'What do you want to remember?',
+    placeholder: 'A half-formed thought, a what-if, a thing worth trying...',
     saveLabel: 'Put it in the box',
     savedLabel: 'Added to your box.',
   },
   note: {
     label: 'Note',
-    pickerLabel: 'Note',
+    pickerLabel: 'note',
     icon: 'document-text-outline',
     fieldLabel: 'The note',
     placeholder: 'Write anything you want to keep.',
@@ -37,7 +37,7 @@ export const KIND_CONFIG: Record<EntryKind, KindConfig> = {
   },
   task: {
     label: 'Task',
-    pickerLabel: 'Task',
+    pickerLabel: 'task',
     icon: 'checkbox-outline',
     fieldLabel: 'What needs doing',
     placeholder: 'What do you need to do?',
@@ -46,7 +46,7 @@ export const KIND_CONFIG: Record<EntryKind, KindConfig> = {
   },
   journal: {
     label: 'Journal',
-    pickerLabel: 'Journal',
+    pickerLabel: 'journal',
     icon: 'book-outline',
     fieldLabel: 'Today',
     placeholder: 'How is today going?',

@@ -24,6 +24,21 @@ export function formatRelativeDay(ts: number): string {
   return formatDate(ts);
 }
 
+/** Compact relative stamp for list rows: "2d ago", "6mo ago". */
+export function formatShortRelative(ts: number): string {
+  const target = new Date(ts);
+  const today = new Date();
+  const start = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const diffDays = Math.round((start(today) - start(target)) / 86400000);
+  if (diffDays <= 0) return 'today';
+  if (diffDays === 1) return '1d ago';
+  if (diffDays < 30) return `${diffDays}d ago`;
+  const months = Math.floor(diffDays / 30);
+  if (months < 12) return `${months}mo ago`;
+  const years = Math.floor(months / 12);
+  return years === 1 ? '1y ago' : `${years}y ago`;
+}
+
 export function dayKey(date: Date): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');

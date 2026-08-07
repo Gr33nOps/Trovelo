@@ -24,11 +24,13 @@ export interface FieldProps extends Omit<TextInputProps, 'style'> {
   right?: ReactNode;
   containerStyle?: StyleProp<ViewStyle>;
   inputStyle?: StyleProp<ViewStyle>;
+  /** `plain` drops the recessed well for editorial screens. */
+  variant?: 'well' | 'plain';
 }
 
 /**
- * A text input carved into the surface. The label is a real `<Text>` rather
- * than a placeholder so it survives once the user starts typing.
+ * A text input. Default is carved into the surface; `plain` is borderless for
+ * the distraction-free editor.
  */
 export const Field = forwardRef<TextInput, FieldProps>(function Field(
   {
@@ -44,6 +46,7 @@ export const Field = forwardRef<TextInput, FieldProps>(function Field(
     maxLength,
     value,
     accessibilityLabel,
+    variant = 'well',
     ...rest
   },
   ref,
@@ -51,6 +54,36 @@ export const Field = forwardRef<TextInput, FieldProps>(function Field(
   const { palette } = useTheme();
   const length = value?.length ?? 0;
   const nearLimit = maxLength !== undefined && length > maxLength * 0.9;
+
+  const input = (
+    <View style={styles.inputRow}>
+      {left}
+      <TextInput
+        ref={ref}
+        value={value}
+        multiline={multiline}
+        maxLength={maxLength}
+        placeholderTextColor={palette.inkFaint}
+        selectionColor={palette.accent}
+        cursorColor={palette.accent}
+        textAlignVertical={multiline ? 'top' : 'center'}
+        accessibilityLabel={accessibilityLabel ?? label}
+        {...rest}
+        style={[
+          styles.input,
+          {
+            color: palette.ink,
+            fontFamily: fonts.body,
+            fontSize: fontSizes.md,
+            lineHeight: multiline ? 28 : undefined,
+            minHeight: multiline ? 140 : MIN_TOUCH - 2,
+          },
+          inputStyle,
+        ]}
+      />
+      {right}
+    </View>
+  );
 
   return (
     <View style={[styles.wrap, containerStyle]}>
@@ -60,35 +93,13 @@ export const Field = forwardRef<TextInput, FieldProps>(function Field(
         </Type>
       ) : null}
 
-      <Well borderRadius={radii.md} style={styles.well}>
-        <View style={styles.inputRow}>
-          {left}
-          <TextInput
-            ref={ref}
-            value={value}
-            multiline={multiline}
-            maxLength={maxLength}
-            placeholderTextColor={palette.inkFaint}
-            selectionColor={palette.accent}
-            cursorColor={palette.accent}
-            textAlignVertical={multiline ? 'top' : 'center'}
-            accessibilityLabel={accessibilityLabel ?? label}
-            {...rest}
-            style={[
-              styles.input,
-              {
-                color: palette.ink,
-                fontFamily: fonts.body,
-                fontSize: fontSizes.md,
-                lineHeight: multiline ? 24 : undefined,
-                minHeight: multiline ? 120 : MIN_TOUCH - 2,
-              },
-              inputStyle,
-            ]}
-          />
-          {right}
-        </View>
-      </Well>
+      {variant === 'plain' ? (
+        input
+      ) : (
+        <Well borderRadius={radii.md} style={styles.well}>
+          {input}
+        </Well>
+      )}
 
       {(hint || error || (showCounter && maxLength !== undefined)) && (
         <View style={styles.footer}>
