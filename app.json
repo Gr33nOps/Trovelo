@@ -1,0 +1,66 @@
+{
+  "expo": {
+    "name": "Trovelo",
+    "slug": "trovelo",
+    "version": "1.12.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "backgroundColor": "#F2F2F2",
+    "primaryColor": "#8A6114",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.trovelo.app",
+      "buildNumber": "13",
+      "userInterfaceStyle": "automatic",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Trovelo uses the microphone so you can dictate ideas instead of typing. Speech is turned into text on this device and never leaves it.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.trovelo.app",
+      "versionCode": 13,
+      "permissions": [
+        "RECORD_AUDIO"
+      ],
+      "blockedPermissions": [
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ],
+      "userInterfaceStyle": "automatic",
+      "adaptiveIcon": {
+        "backgroundColor": "#6B5334",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": true
+    },
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 240,
+          "resizeMode": "contain",
+          "backgroundColor": "#F2F2F2",
+          "dark": {
+            "image": "./assets/splash-icon.png",
+            "backgroundColor": "#141414"
+          }
+        }
+      ],
+      "expo-sharing",
+      "expo-document-picker",
+      "expo-secure-store"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "df52b80a-5118-49af-8db7-14a63f572c47"
+      }
+    },
+    "owner": "zain021xd"
+  }
+}

@@ -1,0 +1,56 @@
+# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env*.local
+
+# typescript
+*.tsbuildinfo
+
+# Build artefacts
+*.apk
+*.aab
+
+# Native projects
+#
+# android/ is deliberately NOT ignored. It holds hand-written code that
+# `expo prebuild` cannot regenerate — the Vosk speech module, its registration
+# in MainApplication.kt, the vosk-android dependency and the llama.rn jniLibs
+# excludes in app/build.gradle. Ignoring it (as the Expo template does) would
+# mean a fresh clone silently loses offline voice input.
+# Only the generated build output is ignored.
+/ios
+android/.gradle/
+android/.idea/
+android/build/
+android/app/build/
+android/local.properties
