@@ -45,8 +45,9 @@ jobs:
         run: echo "sdk.dir=$ANDROID_HOME" > android/local.properties
 
       - name: Build release APK
-        run: ./gradlew assembleRelease
-        working-directory: android
+        run: |
+          sed -i 's|org.gradle.jvmargs=.*|org.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g|' android/gradle.properties
+          ./gradlew -p android assembleRelease
 
       - name: Create release
         uses: softprops/action-gh-release@v2
