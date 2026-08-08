@@ -40,7 +40,9 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        # NODE_ENV is production for the release build, but lint/typecheck/test
+        # tooling is intentionally kept in devDependencies and is required here.
+        run: npm ci --include=dev
 
       - name: Verify tag and project metadata
         run: npm run verify:project
