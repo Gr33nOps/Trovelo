@@ -1,5 +1,5 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -16,6 +16,7 @@ import { useAiRunner } from '../hooks/useAiRunner';
 import { useHaptics } from '../hooks/useHaptics';
 import { RootStackParamList } from '../navigation';
 import { AiTaskId } from '../services/ai';
+import { ActionSheet } from '../ui/ActionSheet';
 import { Button } from '../ui/Button';
 import { Field } from '../ui/Field';
 import { EmptyState } from '../ui/EmptyState';
@@ -50,8 +51,20 @@ export default function EntryDetailScreen({ navigation, route }: Props) {
   const haptics = useHaptics();
   const toast = useToast();
   const ai = useAiRunner();
+  const resetAi = ai.reset;
 
   const [followUpText, setFollowUpText] = useState('');
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [reminderOpen, setReminderOpen] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    setFollowUpText('');
+    setMoreOpen(false);
+    setReminderOpen(false);
+    resetAi();
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+  }, [entryId, resetAi]);
 
   const entry = useMemo(() => entries.find((item) => item.id === entryId), [entries, entryId]);
   const folder = useMemo(
@@ -100,33 +113,15 @@ export default function EntryDetailScreen({ navigation, route }: Props) {
   );
 
   const showRemindOptions = useCallback(() => {
-    Alert.alert('Remind me later', 'When should this come back?', [
-      { text: 'In a week', onPress: () => setReminder(7 * DAY_MS) },
-      { text: 'In a month', onPress: () => setReminder(30 * DAY_MS) },
-      { text: 'In 3 months', onPress: () => setReminder(90 * DAY_MS) },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
-  }, [setReminder]);
+    setMoreOpen(false);
+    setReminderOpen(true);
+  }, []);
 
   const showMoreActions = useCallback(() => {
     if (!entry) return;
     haptics.medium();
-    Alert.alert(entry.title ?? `This ${KIND_CONFIG[entry.kind ?? 'idea'].label.toLowerCase()}`, undefined, [
-      {
-        text: entry.isPinned ? 'Unpin' : 'Pin to top of library',
-        onPress: () => updateEntry(entry.id, { isPinned: !entry.isPinned }),
-      },
-      { text: 'Remind me later', onPress: showRemindOptions },
-      {
-        text: entry.archivedAt ? 'Unarchive' : 'Archive',
-        onPress: () => {
-          updateEntry(entry.id, { archivedAt: entry.archivedAt ? null : Date.now() });
-          toast.show({ message: entry.archivedAt ? 'Unarchived.' : 'Archived. Find it under the Archived filter.' });
-        },
-      },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
-  }, [entry, haptics, updateEntry, showRemindOptions, toast]);
+    setMoreOpen(true);
+  }, [entry, haptics]);
 
   const submitFollowUp = useCallback(() => {
     if (!entry || !followUpText.trim()) return;
@@ -178,6 +173,7 @@ export default function EntryDetailScreen({ navigation, route }: Props) {
       />
 
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xxl }]}
         showsVerticalScrollIndicator={false}
       >
@@ -298,7 +294,11 @@ export default function EntryDetailScreen({ navigation, route }: Props) {
             onApply={applyAi}
             // Only the tag suggestions change the entry; the rest are for reading.
             applyLabel={(taskId) => (taskId === 'tags' ? 'Add these tags' : null)}
-            onOpenSettings={() => navigation.navigate('Models')}
+            onOpenSettings={() =>
+              ai.engine === 'remote'
+                ? navigation.navigate('MainTabs', { screen: 'Settings' })
+                : navigation.navigate('Models')
+            }
           />
         </View>
 
@@ -353,7 +353,7 @@ export default function EntryDetailScreen({ navigation, route }: Props) {
                 <View key={item.id}>
                   {index > 0 ? <Rule /> : null}
                   <Pressable
-                    onPress={() => navigation.navigate('EntryDetail', { entryId: item.id })}
+                    onPress={() => navigation.push('EntryDetail', { entryId: item.id })}
                     accessibilityRole="button"
                     accessibilityLabel={item.title ?? item.text.slice(0, 60)}
                     style={({ pressed }) => [styles.relatedRow, { opacity: pressed ? 0.65 : 1 }]}
@@ -385,7 +385,10 @@ export default function EntryDetailScreen({ navigation, route }: Props) {
             onPress={() =>
               void Share.share({
                 message: entry.title ? `${entry.title}\n\n${entry.text}` : entry.text,
-              }).catch(() => {})
+              }).catch(() => {
+                haptics.warning();
+                toast.show({ message: 'This entry could not be shared.', tone: 'warning' });
+              })
             }
           />
           <Button
@@ -406,6 +409,39 @@ export default function EntryDetailScreen({ navigation, route }: Props) {
           onPress={handleDelete}
         />
       </ScrollView>
+
+      <ActionSheet
+        visible={moreOpen}
+        title={entry.title ?? `This ${kindConfig.label.toLowerCase()}`}
+        onClose={() => setMoreOpen(false)}
+        actions={[
+          {
+            label: entry.isPinned ? 'Unpin' : 'Pin to top of library',
+            onPress: () => updateEntry(entry.id, { isPinned: !entry.isPinned }),
+          },
+          { label: 'Remind me later', onPress: showRemindOptions },
+          {
+            label: entry.archivedAt ? 'Unarchive' : 'Archive',
+            onPress: () => {
+              updateEntry(entry.id, { archivedAt: entry.archivedAt ? null : Date.now() });
+              toast.show({
+                message: entry.archivedAt ? 'Unarchived.' : 'Archived. Find it under the Archived filter.',
+              });
+            },
+          },
+        ]}
+      />
+      <ActionSheet
+        visible={reminderOpen}
+        title="Remind me later"
+        message="When should this come back?"
+        onClose={() => setReminderOpen(false)}
+        actions={[
+          { label: 'In a week', onPress: () => setReminder(7 * DAY_MS) },
+          { label: 'In a month', onPress: () => setReminder(30 * DAY_MS) },
+          { label: 'In 3 months', onPress: () => setReminder(90 * DAY_MS) },
+        ]}
+      />
     </Backdrop>
   );
 }

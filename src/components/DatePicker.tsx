@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { AppState, Pressable, StyleSheet, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { contrastingInk, radius as radii, spacing } from '../constants/theme';
@@ -33,9 +33,24 @@ export function DatePicker({ value, onChange }: Props) {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [viewDate, setViewDate] = useState(() => startOfDay(value ? new Date(value) : new Date()));
 
-  const today = useMemo(() => startOfDay(), []);
+  const [today, setToday] = useState(() => startOfDay());
   const tomorrow = useMemo(() => addDays(today, 1), [today]);
   const nextWeek = useMemo(() => addDays(today, 7), [today]);
+
+  useEffect(() => {
+    const refreshToday = () => {
+      const next = startOfDay();
+      setToday((current) => (sameDay(current, next) ? current : next));
+    };
+    const timer = setInterval(refreshToday, 60_000);
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refreshToday();
+    });
+    return () => {
+      clearInterval(timer);
+      subscription.remove();
+    };
+  }, []);
 
   const pick = (date: Date) => {
     haptics.light();

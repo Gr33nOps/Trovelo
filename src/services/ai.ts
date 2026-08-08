@@ -15,6 +15,7 @@ export {
   isUsableModel,
   listLocalModels,
   partialBytesFor,
+  removeAllModelFiles,
 } from './modelStore';
 export type { DownloadProgress, LocalModelFile, ModelDownload } from './modelStore';
 
@@ -22,8 +23,7 @@ export type { DownloadProgress, LocalModelFile, ModelDownload } from './modelSto
 
 let context: LlamaContext | null = null;
 let contextModelPath: string | null = null;
-let loading: Promise<LlamaContext> | null = null;
-let generating = false;
+let loading: { path: string; promise: Promise<LlamaContext> } | null = null;
 let releaseTimer: ReturnType<typeof setTimeout> | null = null;
 
 /**
@@ -46,7 +46,7 @@ function cancelIdleRelease() {
 function scheduleIdleRelease() {
   cancelIdleRelease();
   releaseTimer = setTimeout(() => {
-    if (!generating) void unloadModel();
+    if (!activeGeneration) void unloadModel();
   }, IDLE_RELEASE_MS);
 }
 
@@ -62,11 +62,12 @@ async function acquireContext(modelPath: string): Promise<LlamaContext> {
 
   if (context && contextModelPath === modelPath) return context;
   if (loading) {
-    const existing = await loading;
-    if (contextModelPath === modelPath) return existing;
+    const pending = loading;
+    const existing = await pending.promise;
+    if (pending.path === modelPath && context === existing) return existing;
   }
 
-  loading = (async () => {
+  const promise = (async () => {
     if (context) {
       await context.release().catch(() => {});
       context = null;
@@ -84,16 +85,23 @@ async function acquireContext(modelPath: string): Promise<LlamaContext> {
     contextModelPath = modelPath;
     return next;
   })();
+  loading = { path: modelPath, promise };
 
   try {
-    return await loading;
+    return await promise;
   } finally {
-    loading = null;
+    if (loading?.promise === promise) loading = null;
   }
 }
 
 export async function unloadModel(): Promise<void> {
   cancelIdleRelease();
+  const run = activeGeneration;
+  if (run) {
+    cancelGeneration(run);
+    await run.done;
+  }
+  if (loading) await loading.promise.catch(() => {});
   const live = context;
   context = null;
   contextModelPath = null;
@@ -107,7 +115,7 @@ export function isModelLoaded(path?: string): boolean {
 /** Free the model when the app leaves the foreground. */
 export function installAiLifecycleHooks(): () => void {
   const onChange = (state: AppStateStatus) => {
-    if (state !== 'active' && !generating) void unloadModel();
+    if (state !== 'active' && !activeGeneration) void unloadModel();
   };
   const subscription = AppState.addEventListener('change', onChange);
   return () => subscription.remove();
@@ -463,6 +471,8 @@ export interface RunTaskOptions {
   onProgress?: (partial: string) => void;
   /** Existing library tags, most-used first. Only consulted for the tags task. */
   knownTags?: string[];
+  /** Cancels only this invocation; it cannot stop a newer run owned by another screen. */
+  signal?: AbortSignal;
 }
 
 export class AiBusyError extends Error {
@@ -479,17 +489,79 @@ export class AiCancelledError extends Error {
   }
 }
 
-let cancelRequested = false;
+export interface GenerationRun {
+  id: number;
+  cancelled: boolean;
+  context: LlamaContext | null;
+  signal?: AbortSignal;
+  onAbort: () => void;
+  onCancel?: () => void;
+  done: Promise<void>;
+  finish: () => void;
+}
+
+let nextGenerationId = 1;
+let activeGeneration: GenerationRun | null = null;
+
+function cancelGeneration(run: GenerationRun): void {
+  if (activeGeneration !== run || run.cancelled) return;
+  run.cancelled = true;
+  run.onCancel?.();
+  void run.context?.stopCompletion().catch(() => {});
+}
+
+/**
+ * Claims the process-wide assistant slot for a local or remote run.
+ *
+ * Every mounted screen shares this lease. This prevents a hidden screen from
+ * starting a second cloud request (and potentially spending quota or sending
+ * another note) while the first screen is still working.
+ */
+export function beginGeneration(signal?: AbortSignal, onCancel?: () => void): GenerationRun {
+  if (activeGeneration) throw new AiBusyError();
+  if (signal?.aborted) throw new AiCancelledError();
+
+  let finish!: () => void;
+  const done = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  const run = {
+    id: nextGenerationId++,
+    cancelled: false,
+    context: null,
+    signal,
+    onAbort: () => {},
+    onCancel,
+    done,
+    finish,
+  } satisfies GenerationRun;
+  run.onAbort = () => cancelGeneration(run);
+  activeGeneration = run;
+  signal?.addEventListener('abort', run.onAbort);
+  // Defensive against AbortSignal implementations that can change state
+  // between the initial check and listener registration.
+  if (signal?.aborted) cancelGeneration(run);
+  return run;
+}
+
+export function endGeneration(run: GenerationRun): void {
+  run.signal?.removeEventListener('abort', run.onAbort);
+  if (activeGeneration === run) activeGeneration = null;
+  run.finish();
+  scheduleIdleRelease();
+}
+
+export function generationIsActive(run: GenerationRun): boolean {
+  return activeGeneration === run && !run.cancelled;
+}
 
 /** Asks the running generation to stop. Safe to call when nothing is running. */
 export function stopGeneration(): void {
-  if (!generating) return;
-  cancelRequested = true;
-  void context?.stopCompletion().catch(() => {});
+  if (activeGeneration) cancelGeneration(activeGeneration);
 }
 
 export function isGenerating(): boolean {
-  return generating;
+  return activeGeneration !== null;
 }
 
 /**
@@ -504,18 +576,16 @@ export async function runTask(
   modelPath: string,
   options: RunTaskOptions = {},
 ): Promise<string> {
-  if (generating) throw new AiBusyError();
-
   const task = AI_TASKS[taskId];
   const source = text.trim();
   if (!source) return '';
 
-  generating = true;
-  cancelRequested = false;
+  const run = beginGeneration(options.signal);
 
   try {
     const ctx = await acquireContext(modelPath);
-    if (cancelRequested) throw new AiCancelledError();
+    run.context = ctx;
+    if (run.cancelled || activeGeneration !== run) throw new AiCancelledError();
 
     let streamed = '';
     const result = await ctx.completion(
@@ -533,24 +603,18 @@ export async function runTask(
       },
       options.onProgress
         ? (data) => {
+            if (run.cancelled || activeGeneration !== run) return;
             streamed += data.token;
             options.onProgress?.(streamed);
           }
         : undefined,
     );
 
-    if (cancelRequested) {
-      // Keep whatever was produced before the stop. It is often usable.
-      const partial = cleanOutput(result.text || streamed, task, source.length);
-      if (!partial) throw new AiCancelledError();
-      return partial;
-    }
+    if (run.cancelled || activeGeneration !== run) throw new AiCancelledError();
 
     return cleanOutput(result.text, task, source.length);
   } finally {
-    generating = false;
-    cancelRequested = false;
-    scheduleIdleRelease();
+    endGeneration(run);
   }
 }
 
@@ -592,17 +656,15 @@ export async function askBox(
   modelPath: string,
   options: RunTaskOptions = {},
 ): Promise<AskBoxResult> {
-  if (generating) throw new AiBusyError();
-
   const trimmedQuestion = question.trim();
   if (!trimmedQuestion || sources.length === 0) return { answer: '', usedIds: [] };
 
-  generating = true;
-  cancelRequested = false;
+  const run = beginGeneration(options.signal);
 
   try {
     const ctx = await acquireContext(modelPath);
-    if (cancelRequested) throw new AiCancelledError();
+    run.context = ctx;
+    if (run.cancelled || activeGeneration !== run) throw new AiCancelledError();
 
     let budget = ASK_BOX_CONTEXT_BUDGET;
     const usedIds: string[] = [];
@@ -637,22 +699,17 @@ export async function askBox(
       },
       options.onProgress
         ? (data) => {
+            if (run.cancelled || activeGeneration !== run) return;
             streamed += data.token;
             options.onProgress?.(streamed);
           }
         : undefined,
     );
 
-    if (cancelRequested) {
-      const partial = stripWrappingQuotes(result.text || streamed);
-      if (!partial) throw new AiCancelledError();
-      return { answer: partial, usedIds };
-    }
+    if (run.cancelled || activeGeneration !== run) throw new AiCancelledError();
 
     return { answer: stripWrappingQuotes(result.text).trim(), usedIds };
   } finally {
-    generating = false;
-    cancelRequested = false;
-    scheduleIdleRelease();
+    endGeneration(run);
   }
 }

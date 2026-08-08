@@ -18,7 +18,12 @@ import {
   radius,
   spacing,
 } from '../constants/theme';
-import { DEFAULT_PREFERENCES, loadPreferences, savePreferences } from '../storage/storage';
+import {
+  DEFAULT_PREFERENCES,
+  clearStoredPreferences,
+  loadPreferences,
+  savePreferences,
+} from '../storage/storage';
 import { AccentId, Preferences, ThemeMode } from '../types';
 import { todayKey, yesterdayKey } from '../utils/date';
 
@@ -41,6 +46,8 @@ export interface Theme {
   setAccentId: (accentId: AccentId) => void;
   completeOnboarding: () => void;
   registerAppOpen: () => void;
+  /** Clears preferences on disk and restores the provider's in-memory defaults. */
+  resetPreferences: () => Promise<void>;
 }
 
 const ThemeContext = createContext<Theme | null>(null);
@@ -58,13 +65,18 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
    * picked).
    */
   const prefsRef = useRef(prefs);
+  const persistenceReady = useRef(false);
   prefsRef.current = prefs;
 
   const commit = useCallback((mutate: (current: Preferences) => Preferences) => {
     const next = mutate(prefsRef.current);
     prefsRef.current = next;
     setPrefs(next);
-    void savePreferences(next);
+    if (persistenceReady.current) {
+      void savePreferences(next).catch((error) => {
+        if (__DEV__) console.warn('[theme] failed to persist preferences', error);
+      });
+    }
   }, []);
 
   useEffect(() => {
@@ -72,8 +84,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     loadPreferences()
       .then((stored) => {
         if (!active) return;
+        persistenceReady.current = true;
         prefsRef.current = stored;
         setPrefs(stored);
+      })
+      .catch((error) => {
+        // Do not let a failed/corrupt read turn into a write of defaults. The
+        // app can still render with defaults, and an explicit reset recovers it.
+        persistenceReady.current = false;
+        if (__DEV__) console.warn('[theme] preference hydration failed', error);
       })
       .finally(() => {
         if (active) setReady(true);
@@ -113,6 +132,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     });
   }, [commit]);
 
+  const resetPreferences = useCallback(async () => {
+    await clearStoredPreferences();
+    const defaults = { ...DEFAULT_PREFERENCES };
+    persistenceReady.current = true;
+    prefsRef.current = defaults;
+    setPrefs(defaults);
+    setReady(true);
+  }, []);
+
   const isDark = prefs.themeMode === 'system' ? systemScheme === 'dark' : prefs.themeMode === 'dark';
   const palette = buildPalette(isDark ? 'dark' : 'light', prefs.accentId);
 
@@ -135,6 +163,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       setAccentId,
       completeOnboarding,
       registerAppOpen,
+      resetPreferences,
     }),
     [
       isDark,
@@ -150,6 +179,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       setAccentId,
       completeOnboarding,
       registerAppOpen,
+      resetPreferences,
     ],
   );
 

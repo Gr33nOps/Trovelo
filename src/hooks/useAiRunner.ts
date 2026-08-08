@@ -9,7 +9,6 @@ import {
   checkModelReady,
   hasDrifted,
   runTask,
-  stopGeneration,
 } from '../services/ai';
 import { getRemoteApiKey, runRemoteTask } from '../services/aiProvider';
 import { AiEngineKind } from '../types';
@@ -67,14 +66,15 @@ export function useAiRunner(): AiRunner {
   const [modelReady, setModelReady] = useState<boolean | null>(null);
   const [remoteReady, setRemoteReady] = useState<boolean | null>(null);
   const mounted = useRef(true);
-  const abortRef = useRef<AbortController | null>(null);
+  const nextRunId = useRef(1);
+  const activeRun = useRef<{ id: number; controller: AbortController } | null>(null);
 
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
-      stopGeneration();
-      abortRef.current?.abort();
+      activeRun.current?.controller.abort();
+      activeRun.current = null;
     };
   }, []);
 
@@ -100,7 +100,7 @@ export function useAiRunner(): AiRunner {
       return;
     }
     setRemoteReady(null);
-    void getRemoteApiKey().then((key) => {
+    void getRemoteApiKey(remoteAiConfig).then((key) => {
       if (active) setRemoteReady(!!key);
     });
     return () => {
@@ -126,11 +126,15 @@ export function useAiRunner(): AiRunner {
             ? 'ready'
             : 'no-model';
 
-  const reset = useCallback(() => setState(IDLE), []);
+  const reset = useCallback(() => {
+    activeRun.current?.controller.abort();
+    activeRun.current = null;
+    setState(IDLE);
+  }, []);
 
   const cancel = useCallback(() => {
-    stopGeneration();
-    abortRef.current?.abort();
+    activeRun.current?.controller.abort();
+    activeRun.current = null;
     setState((current) => ({ ...current, running: false }));
   }, []);
 
@@ -139,31 +143,43 @@ export function useAiRunner(): AiRunner {
       const source = text.trim();
       if (!source) return null;
 
+      if (activeRun.current) {
+        setState((current) => ({ ...current, error: 'One thing at a time. The assistant is still working.' }));
+        return null;
+      }
+
       if (!aiEnabled) {
         setState({ ...IDLE, error: 'Turn on the assistant first.' });
         return null;
       }
 
+      const id = nextRunId.current++;
+      const controller = new AbortController();
+      activeRun.current = { id, controller };
+      const ownsRun = () =>
+        mounted.current && activeRun.current?.id === id && !controller.signal.aborted;
+
       if (aiEngine === 'remote') {
         if (!remoteAiConfig) {
+          activeRun.current = null;
           setState({ ...IDLE, error: 'Set up a cloud provider in Settings first.' });
           return null;
         }
-        const apiKey = await getRemoteApiKey();
+        const apiKey = await getRemoteApiKey(remoteAiConfig);
+        if (!ownsRun()) return null;
         if (!apiKey) {
+          activeRun.current = null;
           setState({ ...IDLE, error: 'Add an API key for the cloud provider in Settings.' });
           return null;
         }
 
         setState({ taskId, output: '', running: true, error: null, drifted: false });
-        const controller = new AbortController();
-        abortRef.current = controller;
         try {
           const result = await runRemoteTask(taskId, source, remoteAiConfig, apiKey, {
             knownTags,
             signal: controller.signal,
           });
-          if (!mounted.current) return result;
+          if (!ownsRun()) return null;
           setState({
             taskId,
             output: result,
@@ -173,7 +189,7 @@ export function useAiRunner(): AiRunner {
           });
           return result;
         } catch (error) {
-          if (!mounted.current) return null;
+          if (!ownsRun()) return null;
           if (error instanceof AiCancelledError) {
             setState((current) => ({ ...current, running: false }));
             return null;
@@ -183,12 +199,14 @@ export function useAiRunner(): AiRunner {
           setState({ taskId, output: '', running: false, error: message, drifted: false });
           return null;
         } finally {
-          abortRef.current = null;
+          if (activeRun.current?.id === id) activeRun.current = null;
         }
       }
 
       const path = await checkModelReady(selectedModelPath);
+      if (!ownsRun()) return null;
       if (!path) {
+        activeRun.current = null;
         setState({ ...IDLE, error: 'Pick a model for the local assistant first.' });
         return null;
       }
@@ -198,13 +216,14 @@ export function useAiRunner(): AiRunner {
       try {
         const result = await runTask(taskId, source, path, {
           knownTags,
+          signal: controller.signal,
           onProgress: (partial) => {
-            if (mounted.current) {
+            if (ownsRun()) {
               setState((current) => (current.running ? { ...current, output: partial } : current));
             }
           },
         });
-        if (!mounted.current) return result;
+        if (!ownsRun()) return null;
         setState({
           taskId,
           output: result,
@@ -214,7 +233,7 @@ export function useAiRunner(): AiRunner {
         });
         return result;
       } catch (error) {
-        if (!mounted.current) return null;
+        if (!ownsRun()) return null;
         if (error instanceof AiCancelledError) {
           setState((current) => ({ ...current, running: false }));
           return null;
@@ -227,6 +246,8 @@ export function useAiRunner(): AiRunner {
               : `${AI_TASKS[taskId].label} did not work this time.`;
         setState({ taskId, output: '', running: false, error: message, drifted: false });
         return null;
+      } finally {
+        if (activeRun.current?.id === id) activeRun.current = null;
       }
     },
     [aiEnabled, aiEngine, selectedModelPath, remoteAiConfig],

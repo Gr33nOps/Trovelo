@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -14,7 +14,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useHaptics } from '../hooks/useHaptics';
 import { RootStackParamList } from '../navigation';
-import { unloadModel } from '../services/ai';
+import { isGenerating, unloadModel } from '../services/ai';
 import {
   LocalModelFile,
   deleteModelFile,
@@ -53,20 +53,40 @@ export default function ModelsScreen({ navigation }: Props) {
   const [installed, setInstalled] = useState<Record<string, boolean>>({});
   const [sideloaded, setSideloaded] = useState<LocalModelFile[]>([]);
   const [busy, setBusy] = useState(false);
+  const [refreshing, setRefreshing] = useState(true);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const refreshRun = useRef(0);
 
   const refresh = useCallback(async () => {
-    const files = await listLocalModels();
-    setSideloaded(files.filter((file) => !CATALOG_FILE_NAMES.has(file.fileName)));
+    const run = ++refreshRun.current;
+    setRefreshing(true);
+    setRefreshError(null);
+    try {
+      const files = await listLocalModels();
+      const checkedFiles = await Promise.all(
+        files.map(async (file) => ({ file, usable: await isUsableModel(file.path) })),
+      );
+      const usableFiles = checkedFiles.filter((item) => item.usable).map((item) => item.file);
 
-    const map: Record<string, boolean> = {};
-    await Promise.all(
-      AI_MODELS.map(async (model) => {
-        map[getModelPath(model)] = await isUsableModel(getModelPath(model));
-      }),
-    );
-    for (const file of files) map[file.path] = true;
-    setInstalled(map);
-  }, []);
+      const map: Record<string, boolean> = {};
+      await Promise.all(
+        AI_MODELS.map(async (model) => {
+          map[getModelPath(model)] = await isUsableModel(getModelPath(model));
+        }),
+      );
+      for (const file of usableFiles) map[file.path] = true;
+      if (run !== refreshRun.current) return;
+      setSideloaded(usableFiles.filter((file) => !CATALOG_FILE_NAMES.has(file.fileName)));
+      setInstalled(map);
+      if (selectedModelPath && map[selectedModelPath] !== true) setSelectedModelPath(null);
+    } catch (caught) {
+      if (run === refreshRun.current) {
+        setRefreshError(caught instanceof Error ? caught.message : 'Installed models could not be checked.');
+      }
+    } finally {
+      if (run === refreshRun.current) setRefreshing(false);
+    }
+  }, [selectedModelPath, setSelectedModelPath]);
 
   useEffect(() => {
     void refresh();
@@ -80,43 +100,81 @@ export default function ModelsScreen({ navigation }: Props) {
 
   const choose = useCallback(
     (path: string) => {
-      if (selectedModelPath === path) return;
-      haptics.light();
+      if (selectedModelPath === path || refreshing) return;
+      if (isGenerating()) {
+        haptics.warning();
+        toast.show({
+          message: 'Wait for the assistant to finish before switching models.',
+          tone: 'warning',
+        });
+        return;
+      }
       // The live context belongs to the previous model; drop it before switching.
-      void unloadModel().catch(() => {});
-      setSelectedModelPath(path);
-      if (!aiEnabled) setAiEnabled(true);
+      void unloadModel()
+        .then(() => {
+          setSelectedModelPath(path);
+          if (!aiEnabled) setAiEnabled(true);
+          haptics.light();
+        })
+        .catch((caught) => {
+          haptics.warning();
+          toast.show({
+            message: caught instanceof Error ? caught.message : 'The assistant model could not be switched.',
+            tone: 'warning',
+          });
+        });
     },
-    [selectedModelPath, haptics, setSelectedModelPath, aiEnabled, setAiEnabled],
+    [selectedModelPath, refreshing, haptics, toast, setSelectedModelPath, aiEnabled, setAiEnabled],
   );
 
   const remove = (path: string, name: string) => {
+    if (isGenerating()) {
+      haptics.warning();
+      toast.show({ message: 'Wait for the assistant to finish before removing a model.', tone: 'warning' });
+      return;
+    }
     Alert.alert(`Remove ${name}?`, 'The file will be deleted from this phone. You can download it again later.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Remove',
         style: 'destructive',
         onPress: async () => {
-          if (selectedModelPath === path) {
-            await unloadModel().catch(() => {});
-            setSelectedModelPath(null);
+          if (busy) return;
+          if (isGenerating()) {
+            haptics.warning();
+            toast.show({ message: 'Wait for the assistant to finish before removing a model.', tone: 'warning' });
+            return;
           }
-          await deleteModelFile(path).catch(() => {});
-          haptics.warning();
-          await refresh();
-          toast.show({ message: `${name} removed.` });
+          setBusy(true);
+          try {
+            if (selectedModelPath === path) await unloadModel();
+            await deleteModelFile(path);
+            if (selectedModelPath === path) setSelectedModelPath(null);
+            haptics.warning();
+            await refresh();
+            toast.show({ message: `${name} removed.` });
+          } catch (caught) {
+            haptics.warning();
+            toast.show({
+              message: caught instanceof Error ? caught.message : `${name} could not be removed.`,
+              tone: 'warning',
+            });
+            await refresh();
+          } finally {
+            setBusy(false);
+          }
         },
       },
     ]);
   };
 
   const addFromFiles = async () => {
-    const result = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true });
-    if (result.canceled) return;
-    const asset = result.assets[0];
-
+    if (busy || refreshing || active) return;
     setBusy(true);
     try {
+      const result = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true });
+      if (result.canceled) return;
+      const asset = result.assets[0];
       const path = await importModelFromFile(asset.uri, asset.name);
       haptics.success();
       await refresh();
@@ -170,6 +228,25 @@ export default function ModelsScreen({ navigation }: Props) {
           </Panel>
         ) : null}
 
+        {refreshError ? (
+          <Panel
+            style={[styles.error, { borderColor: withAlpha(palette.danger, 0.5) }]}
+            borderRadius={radii.lg}
+          >
+            <Ionicons name="alert-circle-outline" size={18} color={palette.danger} />
+            <Type role="caption" color={palette.danger} style={styles.introText}>
+              {refreshError}
+            </Type>
+            <Button label="Retry" size="sm" variant="secondary" onPress={() => void refresh()} />
+          </Panel>
+        ) : null}
+
+        {refreshing ? (
+          <Type role="caption" color={palette.inkFaint}>
+            Checking installed models…
+          </Type>
+        ) : null}
+
         <View>
           <SectionHeader title="Available models" />
           <View style={styles.list}>
@@ -193,7 +270,7 @@ export default function ModelsScreen({ navigation }: Props) {
                   received={downloading ? active?.receivedBytes ?? 0 : 0}
                   total={downloading ? active?.totalBytes ?? model.sizeBytes : model.sizeBytes}
                   resumeHint={downloadHint(model)}
-                  disabled={active !== null && !downloading}
+                  disabled={busy || refreshing || (active !== null && !downloading)}
                   onDownload={() => void startDownload(model)}
                   onPause={pauseDownload}
                   onCancel={cancelDownload}
@@ -225,7 +302,7 @@ export default function ModelsScreen({ navigation }: Props) {
                     speed={0}
                     received={0}
                     total={file.sizeBytes}
-                    disabled={active !== null}
+                    disabled={busy || refreshing || active !== null}
                     onDownload={() => {}}
                     onPause={() => {}}
                     onCancel={() => {}}
@@ -244,7 +321,7 @@ export default function ModelsScreen({ navigation }: Props) {
           size="md"
           fullWidth
           loading={busy}
-          disabled={active !== null}
+          disabled={refreshing || active !== null}
           onPress={() => void addFromFiles()}
           icon={<Ionicons name="folder-open-outline" size={16} color={palette.ink} />}
         />
@@ -365,11 +442,25 @@ function ModelCard({
       ) : installed ? (
         <View style={styles.cardActions}>
           {selected ? (
-            <Button label="Remove" size="sm" variant="secondary" onPress={onRemove} style={styles.grow} />
+            <Button
+              label="Remove"
+              size="sm"
+              variant="secondary"
+              onPress={onRemove}
+              disabled={disabled}
+              style={styles.grow}
+            />
           ) : (
             <>
-              <Button label="Use this one" size="sm" variant="primary" onPress={onUse} style={styles.grow} />
-              <Button label="Remove" size="sm" variant="plain" onPress={onRemove} />
+              <Button
+                label="Use this one"
+                size="sm"
+                variant="primary"
+                onPress={onUse}
+                disabled={disabled}
+                style={styles.grow}
+              />
+              <Button label="Remove" size="sm" variant="plain" onPress={onRemove} disabled={disabled} />
             </>
           )}
         </View>

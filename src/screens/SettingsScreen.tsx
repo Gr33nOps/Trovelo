@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -13,14 +13,23 @@ import { useToast } from '../context/ToastContext';
 import { useHaptics } from '../hooks/useHaptics';
 import { MainTabScreenProps } from '../navigation';
 import { androidSpeechModuleAvailable, isAndroidSpeechAvailable } from '../services/androidSpeech';
-import { clearRemoteApiKey, getRemoteApiKey, setRemoteApiKey } from '../services/aiProvider';
+import { unloadModel } from '../services/ai';
+import { cleanBackupCache } from '../services/backup';
+import {
+  clearAllRemoteApiKeys,
+  clearRemoteApiKey,
+  getRemoteApiKey,
+  setRemoteApiKey,
+} from '../services/aiProvider';
 import {
   SPEECH_MODEL_SIZE_LABEL,
+  SpeechDownloadHandle,
   downloadSpeechModel,
   isSpeechModelReady,
   removeSpeechModel,
   speechAvailable,
 } from '../services/speech';
+import { removeAllModelFiles } from '../services/modelStore';
 import { clearAllStoredData } from '../storage/storage';
 import { AiEngineKind, RemoteAiConfig, ThemeMode, VoiceProvider } from '../types';
 import { Button } from '../ui/Button';
@@ -51,7 +60,7 @@ const ENGINE_OPTIONS = [
 
 export default function SettingsScreen({ navigation }: Props) {
   const tabBarHeight = useBottomTabBarHeight();
-  const { palette, mode, setMode, isDark, accentId, setAccentId } = useTheme();
+  const { palette, mode, setMode, isDark, accentId, setAccentId, resetPreferences } = useTheme();
   const settings = useSettings();
   const { entries, categories, addCategory, renameCategory, deleteCategory, clearAll } = useEntries();
   const haptics = useHaptics();
@@ -61,16 +70,32 @@ export default function SettingsScreen({ navigation }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
 
-  const [speechReady, setSpeechReady] = useState(false);
+  const [speechReady, setSpeechReady] = useState<boolean | null>(null);
   const [speechProgress, setSpeechProgress] = useState<number | null>(null);
+  const [removingSpeech, setRemovingSpeech] = useState(false);
   const [androidSpeechReady, setAndroidSpeechReady] = useState<boolean | null>(null);
   const [hasRemoteKey, setHasRemoteKey] = useState(false);
+  const [erasing, setErasing] = useState(false);
+  const speechDownload = useRef<SpeechDownloadHandle | null>(null);
+  const remoteKeyCheck = useRef(0);
 
   const untaggedCount = entries.filter((entry) => entry.tags.length === 0 && !entry.archivedAt).length;
 
   const refreshRemoteKey = useCallback(() => {
-    void getRemoteApiKey().then((key) => setHasRemoteKey(!!key));
-  }, []);
+    const check = ++remoteKeyCheck.current;
+    if (!settings.remoteAiConfig) {
+      setHasRemoteKey(false);
+      return () => {
+        if (remoteKeyCheck.current === check) remoteKeyCheck.current += 1;
+      };
+    }
+    void getRemoteApiKey(settings.remoteAiConfig).then((key) => {
+      if (remoteKeyCheck.current === check) setHasRemoteKey(!!key);
+    });
+    return () => {
+      if (remoteKeyCheck.current === check) remoteKeyCheck.current += 1;
+    };
+  }, [settings.remoteAiConfig]);
 
   useFocusEffect(refreshRemoteKey);
 
@@ -89,51 +114,82 @@ export default function SettingsScreen({ navigation }: Props) {
     );
   };
 
-  const handleSaveRemote = (config: RemoteAiConfig, key: string) => {
-    settings.set('remoteAiConfig', config);
-    if (key) {
-      void setRemoteApiKey(key).then(() => {
-        setHasRemoteKey(true);
-        haptics.success();
-        toast.show({ message: 'Cloud provider saved.', tone: 'success' });
-      });
-    } else {
+  const handleSaveRemote = async (config: RemoteAiConfig, key: string): Promise<boolean> => {
+    let configSaved = false;
+    try {
+      // Persist the visible destination first. If the keystore then fails,
+      // the form remains on that destination for a retry; no secret can be
+      // orphaned under an invisible scope.
+      await settings.setRemoteAiConfig(config);
+      configSaved = true;
+      if (key) {
+        await setRemoteApiKey(config, key);
+      }
+      if (key) setHasRemoteKey(true);
       haptics.success();
       toast.show({ message: 'Cloud provider saved.', tone: 'success' });
+      return true;
+    } catch (caught) {
+      haptics.warning();
+      toast.show({
+        message:
+          configSaved && key
+            ? 'The provider was saved, but its API key could not be stored. Enter the key and try again.'
+            : caught instanceof Error
+              ? caught.message
+              : 'The cloud provider could not be saved.',
+        tone: 'warning',
+      });
+      return false;
     }
   };
 
-  const handleClearRemoteKey = () => {
-    void clearRemoteApiKey().then(() => {
+  const handleClearRemoteKey = async (): Promise<boolean> => {
+    if (!settings.remoteAiConfig) return false;
+    try {
+      await clearRemoteApiKey(settings.remoteAiConfig);
       setHasRemoteKey(false);
       haptics.warning();
       toast.show({ message: 'API key removed.' });
-    });
+      return true;
+    } catch (caught) {
+      haptics.warning();
+      toast.show({
+        message: caught instanceof Error ? caught.message : 'The API key could not be removed.',
+        tone: 'warning',
+      });
+      return false;
+    }
   };
 
   const refreshSpeech = useCallback(() => {
+    setSpeechReady(null);
     void isSpeechModelReady().then(setSpeechReady);
   }, []);
 
   useFocusEffect(refreshSpeech);
 
   const refreshAndroidSpeech = useCallback(() => {
+    setAndroidSpeechReady(null);
     void isAndroidSpeechAvailable().then(setAndroidSpeechReady);
   }, []);
 
   useFocusEffect(refreshAndroidSpeech);
 
   const handleDownloadSpeech = () => {
+    if (speechDownload.current) return;
     setSpeechProgress(0);
-    downloadSpeechModel(
+    speechDownload.current = downloadSpeechModel(
       setSpeechProgress,
       () => {
+        speechDownload.current = null;
         haptics.success();
         setSpeechProgress(null);
         refreshSpeech();
         toast.show({ message: 'Speech pack installed. You can dictate now.', tone: 'success' });
       },
       (message) => {
+        speechDownload.current = null;
         haptics.warning();
         setSpeechProgress(null);
         toast.show({ message, tone: 'warning' });
@@ -141,16 +197,44 @@ export default function SettingsScreen({ navigation }: Props) {
     );
   };
 
+  const cancelSpeechDownload = useCallback(() => {
+    speechDownload.current?.cancel();
+    speechDownload.current = null;
+    setSpeechProgress(null);
+    toast.show({ message: 'Speech pack download cancelled.' });
+  }, [toast]);
+
+  useEffect(
+    () => () => {
+      speechDownload.current?.cancel();
+      speechDownload.current = null;
+    },
+    [],
+  );
+
   const confirmRemoveSpeech = () => {
+    if (removingSpeech) return;
     Alert.alert('Remove the speech pack?', 'Dictation will stop working until you download it again.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Remove',
         style: 'destructive',
         onPress: async () => {
-          await removeSpeechModel();
-          haptics.warning();
-          refreshSpeech();
+          setRemovingSpeech(true);
+          try {
+            await removeSpeechModel();
+            haptics.warning();
+            refreshSpeech();
+            toast.show({ message: 'Speech pack removed.' });
+          } catch (caught) {
+            haptics.warning();
+            toast.show({
+              message: caught instanceof Error ? caught.message : 'The speech pack could not be removed.',
+              tone: 'warning',
+            });
+          } finally {
+            setRemovingSpeech(false);
+          }
         },
       },
     ]);
@@ -209,9 +293,10 @@ export default function SettingsScreen({ navigation }: Props) {
   };
 
   const confirmEraseEverything = () => {
+    if (erasing) return;
     Alert.alert(
       'Delete everything?',
-      `All ${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}, folders and settings will be permanently removed from this phone. This cannot be undone. Make a backup first if you might want them back.`,
+      `All ${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}, folders, settings, API keys, downloaded assistant and speech files, and cached exports will be permanently removed from this phone. This cannot be undone. Make a backup first if you might want your entries back.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -222,10 +307,36 @@ export default function SettingsScreen({ navigation }: Props) {
           text: 'Delete everything',
           style: 'destructive',
           onPress: async () => {
-            haptics.warning();
-            clearAll();
-            await clearAllStoredData();
-            toast.show({ message: 'Everything has been deleted.', tone: 'warning' });
+            setErasing(true);
+            try {
+              speechDownload.current?.cancel();
+              speechDownload.current = null;
+              setSpeechProgress(null);
+              // Unloading intentionally stops any active local generation;
+              // no model context or task may outlive a full-device erase.
+              await unloadModel();
+              await removeAllModelFiles();
+              await removeSpeechModel();
+              // SecureStore is separate from AsyncStorage, and provider keys
+              // are endpoint-scoped, so every registered slot must be cleared.
+              await clearAllRemoteApiKeys();
+              await cleanBackupCache();
+              await clearAllStoredData();
+              await Promise.all([settings.resetSettings(), resetPreferences()]);
+              clearAll();
+              setHasRemoteKey(false);
+              haptics.warning();
+              toast.show({ message: 'Everything has been deleted.', tone: 'warning' });
+              navigation.getParent()?.reset({ index: 0, routes: [{ name: 'Onboarding' }] });
+            } catch (caught) {
+              haptics.warning();
+              toast.show({
+                message: caught instanceof Error ? caught.message : 'Some data could not be deleted. Please try again.',
+                tone: 'warning',
+              });
+            } finally {
+              setErasing(false);
+            }
           },
         },
       ],
@@ -310,8 +421,12 @@ export default function SettingsScreen({ navigation }: Props) {
           />
           <Group>
             <Row
-              title="Cloud AI"
-              subtitle="Groq, OpenRouter, Gemini, or self-hosted"
+              title="Assistant"
+              subtitle={
+                settings.aiEngine === 'remote'
+                  ? 'Groq, OpenRouter, Gemini, or an HTTPS OpenAI-compatible endpoint'
+                  : 'Private, offline suggestions from a model on this phone'
+              }
               right={
                 <Switch
                   value={settings.aiEnabled}
@@ -352,6 +467,7 @@ export default function SettingsScreen({ navigation }: Props) {
           ) : (
             <Panel borderRadius={radii.lg}>
               <RemoteAiSettings
+                key={`${settings.remoteAiConfig?.preset ?? 'none'}:${settings.remoteAiConfig?.baseUrl ?? ''}:${settings.remoteAiConfig?.model ?? ''}`}
                 config={settings.remoteAiConfig}
                 hasStoredKey={hasRemoteKey}
                 onSave={handleSaveRemote}
@@ -395,8 +511,14 @@ export default function SettingsScreen({ navigation }: Props) {
                   {speechProgress !== null ? (
                     <Row
                       title="Downloading speech pack"
-                      right={null}
+                      right={<Button label="Cancel" size="sm" variant="secondary" onPress={cancelSpeechDownload} />}
                       subtitle={`${Math.round(speechProgress * 100)}% done`}
+                      chevron={false}
+                    />
+                  ) : speechReady === null ? (
+                    <Row
+                      title="Checking speech pack"
+                      subtitle="Looking for an existing offline pack on this phone."
                       chevron={false}
                     />
                   ) : (
@@ -409,7 +531,13 @@ export default function SettingsScreen({ navigation }: Props) {
                       }
                       right={
                         speechReady ? (
-                          <Button label="Remove" size="sm" variant="secondary" onPress={confirmRemoveSpeech} />
+                          <Button
+                            label="Remove"
+                            size="sm"
+                            variant="secondary"
+                            loading={removingSpeech}
+                            onPress={confirmRemoveSpeech}
+                          />
                         ) : (
                           <Button label="Download" size="sm" variant="primary" onPress={handleDownloadSpeech} />
                         )
@@ -426,9 +554,17 @@ export default function SettingsScreen({ navigation }: Props) {
             ) : (
               <Group>
                 <Row
-                  title={androidSpeechReady ? "Phone's recognizer ready" : 'No recognizer found'}
+                  title={
+                    androidSpeechReady === null
+                      ? 'Checking phone recognizer'
+                      : androidSpeechReady
+                        ? "Phone's recognizer ready"
+                        : 'No recognizer found'
+                  }
                   subtitle={
-                    androidSpeechReady
+                    androidSpeechReady === null
+                      ? 'Looking for an installed speech recognition service.'
+                      : androidSpeechReady
                       ? 'Uses whatever speech service is installed, usually the Google app. Audio leaves this phone to be transcribed.'
                       : "This phone doesn't have a speech recognition service installed. Switch back to the offline pack."
                   }
@@ -481,20 +617,28 @@ export default function SettingsScreen({ navigation }: Props) {
                     key={category.id}
                     title={category.name}
                     subtitle={subtitle}
-                    onPress={() => {
-                      setEditingId(category.id);
-                      setEditingName(category.name);
-                    }}
-                    accessibilityHint="Rename this folder"
                     right={
-                      <Button
-                        label="Delete"
-                        size="sm"
-                        variant="secondary"
-                        onPress={() => confirmDeleteFolder(category.id)}
-                        accessibilityLabel={`Delete folder ${category.name}`}
-                      />
+                      <View style={styles.folderActions}>
+                        <Button
+                          label="Rename"
+                          size="sm"
+                          variant="plain"
+                          onPress={() => {
+                            setEditingId(category.id);
+                            setEditingName(category.name);
+                          }}
+                          accessibilityLabel={`Rename folder ${category.name}`}
+                        />
+                        <Button
+                          label="Delete"
+                          size="sm"
+                          variant="secondary"
+                          onPress={() => confirmDeleteFolder(category.id)}
+                          accessibilityLabel={`Delete folder ${category.name}`}
+                        />
+                      </View>
                     }
+                    chevron={false}
                   />
                 );
               })
@@ -565,6 +709,7 @@ export default function SettingsScreen({ navigation }: Props) {
               subtitle={`${entries.length} ${entries.length === 1 ? 'entry' : 'entries'} on this phone`}
               destructive
               onPress={confirmEraseEverything}
+              disabled={erasing}
               chevron={false}
             />
           </Group>
@@ -572,8 +717,9 @@ export default function SettingsScreen({ navigation }: Props) {
 
         <View style={styles.about}>
           <Type role="caption" style={styles.aboutText}>
-            Everything stays on your device. No account, no telemetry. Network traffic is only model
-            downloads, both user-initiated. Trovelo has no account and no server.
+            Trovelo has no account, telemetry, or server. Network access happens only when you start a model or
+            speech-pack download, use your phone&apos;s speech recognizer, or run a note through a cloud assistant you
+            configured. Local assistant and offline speech modes keep their content on this device.
           </Type>
         </View>
       </ScrollView>
@@ -620,6 +766,11 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: spacing.sm,
     padding: spacing.md,
+  },
+  folderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
   },
   addFolder: {
     flexDirection: 'row',

@@ -13,7 +13,8 @@ const { VoskSpeech } = NativeModules;
 export const SPEECH_MODEL_URL = 'https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip';
 export const SPEECH_MODEL_FILE_NAME = 'vosk-model-small-en-us-0.15.zip';
 export const SPEECH_MODEL_SIZE_LABEL = '41 MB';
-export const SPEECH_MODEL_SIZE_BYTES = 41 * 1024 * 1024;
+/** Exact size published by the pinned versioned archive. */
+export const SPEECH_MODEL_SIZE_BYTES = 41_205_931;
 
 export const SPEECH_EVENTS = {
   partial: 'VoskSpeechPartial',
@@ -81,6 +82,32 @@ export interface SpeechDownloadHandle {
   cancel: () => void;
 }
 
+interface ActiveSpeechDownload {
+  cancelled: boolean;
+  installing: boolean;
+  nativeHandle: FileSystem.DownloadResumable | null;
+  done: Promise<void>;
+  cancel: () => void;
+}
+
+let activeSpeechDownload: ActiveSpeechDownload | null = null;
+
+async function isUsableSpeechArchive(path: string): Promise<boolean> {
+  try {
+    const info = await FileSystem.getInfoAsync(path);
+    const size = info.exists && !info.isDirectory ? ((info as { size?: number }).size ?? 0) : 0;
+    if (size !== SPEECH_MODEL_SIZE_BYTES) return false;
+    const header = await FileSystem.readAsStringAsync(path, {
+      encoding: FileSystem.EncodingType.Base64,
+      position: 0,
+      length: 4,
+    });
+    return header === 'UEsDBA==';
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Downloads and unpacks the offline speech pack.
  *
@@ -93,16 +120,41 @@ export function downloadSpeechModel(
   onError: (message: string) => void,
 ): SpeechDownloadHandle {
   if (!speechAvailable) {
-    onError('Voice input is not available on this device.');
+    void Promise.resolve().then(() => onError('Voice input is not available on this device.'));
+    return { cancel: () => {} };
+  }
+  if (activeSpeechDownload) {
+    void Promise.resolve().then(() => onError('The speech pack is already downloading.'));
     return { cancel: () => {} };
   }
 
-  let cancelled = false;
-  let handle: FileSystem.DownloadResumable | null = null;
+  const run: ActiveSpeechDownload = {
+    cancelled: false,
+    installing: false,
+    nativeHandle: null,
+    done: Promise.resolve(),
+    cancel: () => {},
+  };
+  run.cancel = () => {
+    if (run.cancelled) return;
+    run.cancelled = true;
+    void run.nativeHandle?.cancelAsync().catch(() => {});
+    // prepareModel is cancellable through the native model-operation token;
+    // removeModel increments it so extraction/loading stops promptly.
+    if (run.installing) void VoskSpeech.removeModel().catch(() => {});
+  };
+  activeSpeechDownload = run;
 
-  void (async () => {
-    const target = zipPath();
+  run.done = (async () => {
+    let target: string | null = null;
     try {
+      target = zipPath();
+      const parsed = new URL(SPEECH_MODEL_URL);
+      if (parsed.protocol !== 'https:' || parsed.username || parsed.password) {
+        throw new Error('The speech pack URL is not secure.');
+      }
+      await FileSystem.deleteAsync(target, { idempotent: true }).catch(() => {});
+      if (run.cancelled || activeSpeechDownload !== run) return;
       const download = FileSystem.createDownloadResumable(
         SPEECH_MODEL_URL,
         target,
@@ -110,13 +162,15 @@ export function downloadSpeechModel(
         (progress) => {
           const total = progress.totalBytesExpectedToWrite ?? 0;
           const written = progress.totalBytesWritten ?? 0;
-          if (total > 0) onProgress(Math.min(1, written / total));
+          if (!run.cancelled && activeSpeechDownload === run && total > 0) {
+            onProgress(Math.min(1, written / total));
+          }
         },
       );
-      handle = download;
+      run.nativeHandle = download;
 
       const result = await download.downloadAsync();
-      if (cancelled) {
+      if (run.cancelled || activeSpeechDownload !== run) {
         await FileSystem.deleteAsync(target, { idempotent: true }).catch(() => {});
         return;
       }
@@ -125,35 +179,63 @@ export function downloadSpeechModel(
         onError('The speech pack could not be downloaded. Check your connection and try again.');
         return;
       }
+      const declaredLength = Object.entries(result.headers).find(
+        ([name]) => name.toLowerCase() === 'content-length',
+      )?.[1];
+      if (declaredLength && Number(declaredLength) !== SPEECH_MODEL_SIZE_BYTES) {
+        await FileSystem.deleteAsync(target, { idempotent: true }).catch(() => {});
+        onError('The speech pack changed at its source. Please try again later.');
+        return;
+      }
+      if (!(await isUsableSpeechArchive(target))) {
+        await FileSystem.deleteAsync(target, { idempotent: true }).catch(() => {});
+        if (!run.cancelled && activeSpeechDownload === run) {
+          onError('The downloaded speech pack is incomplete or invalid. Please try again.');
+        }
+        return;
+      }
+      if (run.cancelled || activeSpeechDownload !== run) {
+        await FileSystem.deleteAsync(target, { idempotent: true }).catch(() => {});
+        return;
+      }
 
+      run.installing = true;
       await VoskSpeech.prepareModel(target, SPEECH_MODEL_FILE_NAME);
+      run.installing = false;
       await FileSystem.deleteAsync(target, { idempotent: true }).catch(() => {});
+      if (run.cancelled || activeSpeechDownload !== run) {
+        await VoskSpeech.removeModel().catch(() => {});
+        return;
+      }
       onComplete();
     } catch (error) {
-      await FileSystem.deleteAsync(target, { idempotent: true }).catch(() => {});
-      if (!cancelled) {
+      if (target) await FileSystem.deleteAsync(target, { idempotent: true }).catch(() => {});
+      if (!run.cancelled && activeSpeechDownload === run) {
         onError(error instanceof Error ? error.message : 'The speech pack could not be installed.');
       }
+    } finally {
+      run.installing = false;
+      if (activeSpeechDownload === run) activeSpeechDownload = null;
     }
   })();
 
   return {
-    cancel: () => {
-      cancelled = true;
-      void handle?.cancelAsync().catch(() => {});
-    },
+    cancel: run.cancel,
   };
 }
 
 export async function removeSpeechModel(): Promise<void> {
+  const download = activeSpeechDownload;
+  if (download) {
+    download.cancel();
+    await download.done.catch(() => {});
+  }
   if (speechAvailable) {
-    await VoskSpeech.removeModel().catch(() => {});
+    const removed = await VoskSpeech.removeModel();
+    if (removed !== true) throw new Error('The installed speech pack could not be removed.');
   }
-  try {
-    await FileSystem.deleteAsync(zipPath(), { idempotent: true }).catch(() => {});
-  } catch {
-    // No documents directory, nothing to remove.
-  }
+  const dir = FileSystem.documentDirectory;
+  if (dir) await FileSystem.deleteAsync(`${dir}${SPEECH_MODEL_FILE_NAME}`, { idempotent: true });
 }
 
 export function startSpeech(): void {

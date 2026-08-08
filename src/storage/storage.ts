@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { Category, Entry, FollowUp, Preferences, isAccentId, isEntryKind, isEntryStatus } from '../types';
 import { DEFAULT_ACCENT_ID } from '../constants/theme';
+import { MAX_TAGS_PER_ENTRY, normalizeTag } from '../utils/tags';
 
 const ENTRIES_KEY = '@trovelo/entries/v1';
 const PREFS_KEY = '@trovelo/prefs/v1';
@@ -20,8 +21,6 @@ export const LEGACY_AI_KEYS = {
 /** Resume token for an interrupted model download. */
 export const MODEL_DOWNLOAD_KEY = '@trovelo/modelDownload/v1';
 
-export const STORAGE_KEYS = [ENTRIES_KEY, PREFS_KEY, CATEGORIES_KEY] as const;
-
 /**
  * Keys written by the pre-Trovelo builds. Values are moved to the `@trovelo/*`
  * keys the first time this version runs, so an update does not look like a
@@ -38,7 +37,7 @@ const LEGACY = {
   modelDownload: '@serendipity/modelDownload/v1',
 } as const;
 
-const MIGRATION_PAIRS: ReadonlyArray<readonly [string, string]> = [
+const MIGRATION_PAIRS: readonly (readonly [string, string])[] = [
   [ENTRIES_KEY, LEGACY.entries],
   [PREFS_KEY, LEGACY.prefs],
   [CATEGORIES_KEY, LEGACY.categories],
@@ -49,22 +48,44 @@ const MIGRATION_PAIRS: ReadonlyArray<readonly [string, string]> = [
   [MODEL_DOWNLOAD_KEY, LEGACY.modelDownload],
 ];
 
+const LEGACY_STORAGE_KEYS = Object.values(LEGACY);
+
+/** Every AsyncStorage key owned by the app, including transitional v1 keys. */
+export const STORAGE_KEYS = [
+  ENTRIES_KEY,
+  PREFS_KEY,
+  CATEGORIES_KEY,
+  SETTINGS_KEY,
+  ...Object.values(LEGACY_AI_KEYS),
+  MODEL_DOWNLOAD_KEY,
+  ...LEGACY_STORAGE_KEYS,
+] as const;
+
 /**
- * Copies any data left under the old `@serendipity/*` keys to their `@trovelo/*`
- * replacements. Runs once, before the providers mount, so a rebranded update
- * keeps every entry, folder, preference and download resume token.
+ * Moves any data left under the old `@serendipity/*` keys to its `@trovelo/*`
+ * replacement. Runs before the providers mount. Removing the source keys after
+ * a successful copy is important: otherwise a later reset could remove the new
+ * record and the next startup would resurrect the supposedly deleted old one.
  */
 export async function migrateLegacyKeys(): Promise<void> {
   try {
+    const currentKeys = MIGRATION_PAIRS.map(([current]) => current);
     const legacyKeys = MIGRATION_PAIRS.map(([, legacy]) => legacy);
-    const values = await AsyncStorage.multiGet([...legacyKeys]);
-    const writes: Array<[string, string]> = [];
+    const [currentValues, legacyValues] = await Promise.all([
+      AsyncStorage.multiGet([...currentKeys]),
+      AsyncStorage.multiGet([...legacyKeys]),
+    ]);
+    const currentByKey = new Map(currentValues);
+    const legacyByKey = new Map(legacyValues);
+    const writes: [string, string][] = [];
     for (const [key, legacy] of MIGRATION_PAIRS) {
-      if ((await AsyncStorage.getItem(key)) !== null) continue;
-      const value = values.find(([stored]) => stored === legacy)?.[1];
+      const currentValue = currentByKey.get(key);
+      if (currentValue !== null && currentValue !== undefined) continue;
+      const value = legacyByKey.get(legacy);
       if (value !== null && value !== undefined) writes.push([key, value]);
     }
     if (writes.length > 0) await AsyncStorage.multiSet(writes);
+    await AsyncStorage.multiRemove([...legacyKeys]);
   } catch (error) {
     if (__DEV__) console.warn('[storage] legacy key migration failed', error);
   }
@@ -88,23 +109,46 @@ export const DEFAULT_PREFERENCES: Preferences = {
  * only the newest pending value per key also avoids re-serialising the whole
  * library on each keystroke-speed change.
  */
-const pending = new Map<string, unknown>();
+const pending = new Map<string, string>();
 const flushing = new Map<string, Promise<void>>();
 
 function writeJson(key: string, value: unknown): Promise<void> {
-  pending.set(key, value);
+  let serialized: string;
+  try {
+    serialized = JSON.stringify(value);
+  } catch (error) {
+    return Promise.reject(error);
+  }
+
+  pending.set(key, serialized);
+  return startFlush(key);
+}
+
+function startFlush(key: string): Promise<void> {
   const inFlight = flushing.get(key);
   if (inFlight) return inFlight;
 
   const run = (async () => {
+    let firstError: unknown;
     try {
       while (pending.has(key)) {
         const next = pending.get(key);
         pending.delete(key);
-        await AsyncStorage.setItem(key, JSON.stringify(next));
+        if (next === undefined) continue;
+        try {
+          await AsyncStorage.setItem(key, next);
+        } catch (error) {
+          firstError ??= error;
+          // If a newer snapshot arrived while this write was in flight, try it
+          // now. Otherwise retain the failed snapshot for the next mutation or
+          // an explicit flush instead of silently losing it.
+          if (!pending.has(key)) {
+            pending.set(key, next);
+            break;
+          }
+        }
       }
-    } catch (error) {
-      if (__DEV__) console.warn(`[storage] failed to persist ${key}`, error);
+      if (firstError !== undefined) throw firstError;
     } finally {
       flushing.delete(key);
     }
@@ -116,17 +160,35 @@ function writeJson(key: string, value: unknown): Promise<void> {
 
 /** Resolves once every queued write has landed. Used before export/reset. */
 export async function flushPendingWrites(): Promise<void> {
+  for (const key of pending.keys()) {
+    if (!flushing.has(key)) void startFlush(key);
+  }
   await Promise.all([...flushing.values()]);
 }
 
-async function readJson<T>(key: string): Promise<T | null> {
+async function readJson<T>(key: string, legacyKey?: string): Promise<T | null> {
   try {
-    const raw = await AsyncStorage.getItem(key);
-    if (!raw) return null;
-    return JSON.parse(raw) as T;
+    let raw = await AsyncStorage.getItem(key);
+    let migratedFromLegacy = false;
+    if (raw === null && legacyKey) {
+      raw = await AsyncStorage.getItem(legacyKey);
+      migratedFromLegacy = raw !== null;
+    }
+    if (raw === null) return null;
+    const parsed = JSON.parse(raw) as T;
+    if (migratedFromLegacy && legacyKey) {
+      // A failed startup batch migration must not make providers hydrate empty
+      // state and then overwrite the still-valid legacy record. Promote this
+      // individual value before returning it as writable state.
+      await AsyncStorage.setItem(key, raw);
+      await AsyncStorage.removeItem(legacyKey).catch((error) => {
+        if (__DEV__) console.warn(`[storage] failed to remove migrated key ${legacyKey}`, error);
+      });
+    }
+    return parsed;
   } catch (error) {
     if (__DEV__) console.warn(`[storage] failed to read ${key}`, error);
-    return null;
+    throw error;
   }
 }
 
@@ -137,13 +199,17 @@ function fallbackId(): string {
 function normalizeFollowUps(raw: unknown): FollowUp[] | undefined {
   if (!Array.isArray(raw)) return undefined;
   const out: FollowUp[] = [];
+  const seen = new Set<string>();
   for (const item of raw) {
     if (typeof item !== 'object' || item === null) continue;
     const record = item as Record<string, unknown>;
     const text = typeof record.text === 'string' ? record.text.trim() : '';
     if (!text) continue;
+    let id = typeof record.id === 'string' && record.id ? record.id : fallbackId();
+    while (seen.has(id)) id = fallbackId();
+    seen.add(id);
     out.push({
-      id: typeof record.id === 'string' && record.id ? record.id : fallbackId(),
+      id,
       at: typeof record.at === 'number' && Number.isFinite(record.at) ? record.at : Date.now(),
       text,
     });
@@ -180,10 +246,10 @@ export function normalizeEntry(raw: unknown): Entry | null {
           new Set(
             record.tags
               .filter((tag): tag is string => typeof tag === 'string')
-              .map((tag) => tag.trim())
+              .map(normalizeTag)
               .filter(Boolean),
           ),
-        )
+        ).slice(0, MAX_TAGS_PER_ENTRY)
       : [],
     categoryId: typeof record.categoryId === 'string' && record.categoryId ? record.categoryId : undefined,
     timesRediscovered:
@@ -210,7 +276,7 @@ export function normalizeEntry(raw: unknown): Entry | null {
 export function normalizeCategory(raw: unknown): Category | null {
   if (typeof raw !== 'object' || raw === null) return null;
   const record = raw as Record<string, unknown>;
-  const name = typeof record.name === 'string' ? record.name.trim() : '';
+  const name = typeof record.name === 'string' ? record.name.trim().slice(0, 40).trim() : '';
   if (!name) return null;
   return {
     id: typeof record.id === 'string' && record.id ? record.id : fallbackId(),
@@ -221,8 +287,9 @@ export function normalizeCategory(raw: unknown): Category | null {
 }
 
 export async function loadEntries(): Promise<Entry[]> {
-  const raw = await readJson<unknown>(ENTRIES_KEY);
-  if (!Array.isArray(raw)) return [];
+  const raw = await readJson<unknown>(ENTRIES_KEY, LEGACY.entries);
+  if (raw === null) return [];
+  if (!Array.isArray(raw)) throw new Error('Stored entries are not an array.');
   const seen = new Set<string>();
   const entries: Entry[] = [];
   for (const item of raw) {
@@ -239,8 +306,9 @@ export function saveEntries(entries: Entry[]): Promise<void> {
 }
 
 export async function loadCategories(): Promise<Category[]> {
-  const raw = await readJson<unknown>(CATEGORIES_KEY);
-  if (!Array.isArray(raw)) return [];
+  const raw = await readJson<unknown>(CATEGORIES_KEY, LEGACY.categories);
+  if (raw === null) return [];
+  if (!Array.isArray(raw)) throw new Error('Stored categories are not an array.');
   const seen = new Set<string>();
   const categories: Category[] = [];
   for (const item of raw) {
@@ -257,8 +325,11 @@ export function saveCategories(categories: Category[]): Promise<void> {
 }
 
 export async function loadPreferences(): Promise<Preferences> {
-  const raw = await readJson<unknown>(PREFS_KEY);
-  if (typeof raw !== 'object' || raw === null) return { ...DEFAULT_PREFERENCES };
+  const raw = await readJson<unknown>(PREFS_KEY, LEGACY.prefs);
+  if (raw === null) return { ...DEFAULT_PREFERENCES };
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error('Stored preferences are not an object.');
+  }
   const prefs = raw as Record<string, unknown>;
   const number = (value: unknown, fallback: number) =>
     typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : fallback;
@@ -281,8 +352,71 @@ export function savePreferences(prefs: Preferences): Promise<void> {
   return writeJson(PREFS_KEY, prefs);
 }
 
+export function loadSettingsRecord(): Promise<unknown | null> {
+  return readJson<unknown>(SETTINGS_KEY, LEGACY.settings);
+}
+
+export function saveSettingsRecord(settings: unknown): Promise<void> {
+  return writeJson(SETTINGS_KEY, settings);
+}
+
+export interface LegacySettingsFields {
+  aiEnabled: string | null;
+  modelPath: string | null;
+  modelId: string | null;
+}
+
+/** Reads both transitional namespaces so a failed batch rename cannot lose settings. */
+export async function loadLegacySettingsFields(): Promise<LegacySettingsFields> {
+  const currentKeys = Object.values(LEGACY_AI_KEYS);
+  const renamedKeys = [LEGACY.aiEnabled, LEGACY.modelPath, LEGACY.modelId];
+  const [currentValues, renamedValues] = await Promise.all([
+    AsyncStorage.multiGet(currentKeys),
+    AsyncStorage.multiGet(renamedKeys),
+  ]);
+  const current = new Map(currentValues);
+  const renamed = new Map(renamedValues);
+  return {
+    aiEnabled: current.get(LEGACY_AI_KEYS.aiEnabled) ?? renamed.get(LEGACY.aiEnabled) ?? null,
+    modelPath: current.get(LEGACY_AI_KEYS.modelPath) ?? renamed.get(LEGACY.modelPath) ?? null,
+    modelId: current.get(LEGACY_AI_KEYS.modelId) ?? renamed.get(LEGACY.modelId) ?? null,
+  };
+}
+
+async function removeStoredKeys(keys: readonly string[]): Promise<void> {
+  for (const key of keys) pending.delete(key);
+  await Promise.allSettled(
+    keys.map((key) => flushing.get(key)).filter((run): run is Promise<void> => run !== undefined),
+  );
+  // A failed in-flight write may have restored its value to `pending`.
+  for (const key of keys) pending.delete(key);
+  await AsyncStorage.multiRemove([...keys]);
+}
+
+export function clearLegacySettingsFields(): Promise<void> {
+  return removeStoredKeys([
+    ...Object.values(LEGACY_AI_KEYS),
+    LEGACY.aiEnabled,
+    LEGACY.modelPath,
+    LEGACY.modelId,
+  ]);
+}
+
+export function clearStoredSettings(): Promise<void> {
+  return removeStoredKeys([
+    SETTINGS_KEY,
+    ...Object.values(LEGACY_AI_KEYS),
+    LEGACY.settings,
+    LEGACY.aiEnabled,
+    LEGACY.modelPath,
+    LEGACY.modelId,
+  ]);
+}
+
+export function clearStoredPreferences(): Promise<void> {
+  return removeStoredKeys([PREFS_KEY, LEGACY.prefs]);
+}
+
 export async function clearAllStoredData(): Promise<void> {
-  pending.clear();
-  await flushPendingWrites();
-  await AsyncStorage.multiRemove([...STORAGE_KEYS]);
+  await removeStoredKeys(STORAGE_KEYS);
 }

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View } from 'react-native';
+import { AppState, View } from 'react-native';
 import { DefaultTheme, NavigationContainer, Theme as NavTheme } from '@react-navigation/native';
 import {
   SourceSans3_400Regular,
@@ -32,7 +32,7 @@ export default function App() {
   // Move any data stored under the old `@serendipity/*` keys to `@trovelo/*`
   // before any provider reads, so the rename is invisible to existing users.
   const [keysMigrated, setKeysMigrated] = useState(false);
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     SourceSans3_400Regular,
     SourceSans3_500Medium,
     SourceSans3_600SemiBold,
@@ -51,11 +51,11 @@ export default function App() {
   useEffect(() => {
     const removeAiHooks = installAiLifecycleHooks();
     // Sweep any backup file left in the cache by a previous session.
-    void cleanBackupCache();
+    void cleanBackupCache().catch(() => {});
     return removeAiHooks;
   }, []);
 
-  if (!keysMigrated || !fontsLoaded) {
+  if (!keysMigrated || (!fontsLoaded && !fontError)) {
     // Behind the still-visible native splash, so the flash is never shown.
     return <View style={{ flex: 1, backgroundColor: '#FAFAF8' }} />;
   }
@@ -87,7 +87,12 @@ function AppShell() {
   const ready = themeReady && settingsReady && entriesLoaded;
 
   useEffect(() => {
-    if (themeReady) registerAppOpen();
+    if (!themeReady) return;
+    registerAppOpen();
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') registerAppOpen();
+    });
+    return () => subscription.remove();
   }, [themeReady, registerAppOpen]);
 
   useEffect(() => {

@@ -79,7 +79,20 @@ def enableMinifyInReleaseBuilds = (findProperty('android.enableMinifyInReleaseBu
  * give correct results when using with locales other than en-US. Note that
  * this variant is about 6MiB larger per architecture than default.
  */
-def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
+def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.0.1'
+
+def releaseSigningProperties = [
+    'TROVELO_UPLOAD_STORE_FILE',
+    'TROVELO_UPLOAD_STORE_PASSWORD',
+    'TROVELO_UPLOAD_KEY_ALIAS',
+    'TROVELO_UPLOAD_KEY_PASSWORD',
+]
+def hasReleaseSigning = releaseSigningProperties.every { project.hasProperty(it) }
+def hasPartialReleaseSigning = releaseSigningProperties.any { project.hasProperty(it) } && !hasReleaseSigning
+
+if (hasPartialReleaseSigning) {
+    throw new GradleException("Release signing is only partially configured. Provide every TROVELO_UPLOAD_* property.")
+}
 
 android {
     ndkVersion rootProject.ext.ndkVersion
@@ -92,8 +105,8 @@ android {
         applicationId 'com.trovelo.app'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 14
-        versionName "1.13.0"
+        versionCode 15
+        versionName "1.13.1"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }
@@ -104,12 +117,11 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
-        // A real upload key, supplied through ~/.gradle/gradle.properties or the
-        // environment. Declared only when configured so ordinary local release
-        // builds still work without one.
-        if (project.hasProperty('TROVELO_UPLOAD_STORE_FILE')) {
+        // A protected upload key supplied through Gradle properties. Release
+        // artifacts are never allowed to fall back to the public debug key.
+        if (hasReleaseSigning) {
             release {
-                storeFile file(TROVELO_UPLOAD_STORE_FILE)
+                storeFile file(project.property('TROVELO_UPLOAD_STORE_FILE'))
                 storePassword TROVELO_UPLOAD_STORE_PASSWORD
                 keyAlias TROVELO_UPLOAD_KEY_ALIAS
                 keyPassword TROVELO_UPLOAD_KEY_PASSWORD
@@ -121,13 +133,9 @@ android {
             signingConfig signingConfigs.debug
         }
         release {
-            // Falls back to the debug key so `assembleRelease` works out of the
-            // box, but anything destined for a store must be signed with a real
-            // upload key. Set TROVELO_UPLOAD_* to use one. (EAS Build
-            // supplies its own credentials and overrides this.)
-            signingConfig project.hasProperty('TROVELO_UPLOAD_STORE_FILE')
-                ? signingConfigs.release
-                : signingConfigs.debug
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
             minifyEnabled enableMinifyInReleaseBuilds

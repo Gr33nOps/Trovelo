@@ -2,6 +2,7 @@ import React, { ReactNode, forwardRef } from 'react';
 import {
   StyleProp,
   StyleSheet,
+  TextStyle,
   TextInput,
   TextInputProps,
   View,
@@ -23,7 +24,7 @@ export interface FieldProps extends Omit<TextInputProps, 'style'> {
   left?: ReactNode;
   right?: ReactNode;
   containerStyle?: StyleProp<ViewStyle>;
-  inputStyle?: StyleProp<ViewStyle>;
+  inputStyle?: StyleProp<TextStyle>;
   /** `plain` drops the recessed well for editorial screens. */
   variant?: 'well' | 'plain';
 }
@@ -46,6 +47,8 @@ export const Field = forwardRef<TextInput, FieldProps>(function Field(
     maxLength,
     value,
     accessibilityLabel,
+    accessibilityHint,
+    accessibilityState,
     variant = 'well',
     ...rest
   },
@@ -67,8 +70,15 @@ export const Field = forwardRef<TextInput, FieldProps>(function Field(
         selectionColor={palette.accent}
         cursorColor={palette.accent}
         textAlignVertical={multiline ? 'top' : 'center'}
-        accessibilityLabel={accessibilityLabel ?? label}
         {...rest}
+        accessibilityLabel={accessibilityLabel ?? label}
+        accessibilityHint={error ?? accessibilityHint}
+        accessibilityState={
+          {
+            ...accessibilityState,
+            invalid: !!error,
+          } as TextInputProps['accessibilityState']
+        }
         style={[
           styles.input,
           {
@@ -107,6 +117,7 @@ export const Field = forwardRef<TextInput, FieldProps>(function Field(
             role="caption"
             color={error ? palette.danger : palette.inkFaint}
             style={styles.footerText}
+            accessibilityLiveRegion={error ? 'polite' : 'none'}
           >
             {error ?? hint ?? ''}
           </Type>

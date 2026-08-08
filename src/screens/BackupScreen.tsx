@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Sharing from 'expo-sharing';
@@ -41,6 +41,7 @@ export default function BackupScreen({ navigation }: Props) {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [creating, setCreating] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
 
   const [picking, setPicking] = useState(false);
@@ -49,7 +50,19 @@ export default function BackupScreen({ navigation }: Props) {
   const [unlocking, setUnlocking] = useState(false);
 
   const mismatch = confirm.length > 0 && password !== confirm;
+  const missingConfirmation = password.length > 0 && confirm.length === 0;
   const tooShort = password.length > 0 && password.length < 8;
+  const busy = creating || exporting || picking || unlocking;
+
+  useEffect(
+    () =>
+      navigation.addListener('beforeRemove', (event) => {
+        if (!busy) return;
+        event.preventDefault();
+        toast.show({ message: 'Wait for the current file operation to finish.', tone: 'warning' });
+      }),
+    [navigation, busy, toast],
+  );
 
   const share = async (uri: string, fileName: string, mimeType: string) => {
     if (!(await Sharing.isAvailableAsync())) {
@@ -59,6 +72,11 @@ export default function BackupScreen({ navigation }: Props) {
   };
 
   const handleCreateBackup = async () => {
+    if (busy) return;
+    if (missingConfirmation) {
+      toast.show({ message: 'Type the password again before creating the backup.', tone: 'warning' });
+      return;
+    }
     if (mismatch) {
       toast.show({ message: 'The two passwords are not the same.', tone: 'warning' });
       return;
@@ -99,12 +117,13 @@ export default function BackupScreen({ navigation }: Props) {
       setProgress(null);
       setCreating(false);
       // Never leave a plain copy of everything sitting in the cache.
-      void cleanBackupCache();
+      void cleanBackupCache().catch(() => {});
     }
   };
 
   const handleExportMarkdown = async () => {
-    setCreating(true);
+    if (busy) return;
+    setExporting(true);
     try {
       const { uri, fileName } = await createMarkdownExport(entries, categories);
       await share(uri, fileName, 'text/markdown');
@@ -116,8 +135,8 @@ export default function BackupScreen({ navigation }: Props) {
         tone: 'warning',
       });
     } finally {
-      setCreating(false);
-      void cleanBackupCache();
+      setExporting(false);
+      void cleanBackupCache().catch(() => {});
     }
   };
 
@@ -151,16 +170,20 @@ export default function BackupScreen({ navigation }: Props) {
   };
 
   const handleChooseFile = async () => {
-    const result = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true });
-    if (result.canceled) return;
-    const asset = result.assets[0];
-
+    if (busy) return;
+    let selectedUri: string | null = null;
     setPicking(true);
     try {
+      const result = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true });
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      selectedUri = asset.uri;
+      setLockedUri(null);
+      setUnlockPassword('');
       confirmRestore(await openBackupFile(asset.uri));
     } catch (error) {
-      if (error instanceof LockedBackupError) {
-        setLockedUri(asset.uri);
+      if (error instanceof LockedBackupError && selectedUri) {
+        setLockedUri(selectedUri);
         setUnlockPassword('');
         haptics.light();
       } else {
@@ -176,7 +199,7 @@ export default function BackupScreen({ navigation }: Props) {
   };
 
   const handleUnlock = async () => {
-    if (!lockedUri || !unlockPassword) return;
+    if (!lockedUri || !unlockPassword || busy) return;
     setUnlocking(true);
     setProgress(0);
     try {
@@ -201,7 +224,7 @@ export default function BackupScreen({ navigation }: Props) {
     } finally {
       setProgress(null);
       setUnlocking(false);
-      void cleanBackupCache();
+      void cleanBackupCache().catch(() => {});
     }
   };
 
@@ -273,7 +296,7 @@ export default function BackupScreen({ navigation }: Props) {
               label={password ? 'Create locked backup' : 'Create backup'}
               onPress={() => void handleCreateBackup()}
               loading={creating}
-              disabled={mismatch || tooShort || entries.length === 0}
+              disabled={busy || missingConfirmation || mismatch || tooShort || entries.length === 0}
               variant="primary"
               size="md"
               fullWidth
@@ -282,7 +305,8 @@ export default function BackupScreen({ navigation }: Props) {
             <Button
               label="Export as Markdown instead"
               onPress={() => void handleExportMarkdown()}
-              disabled={creating || entries.length === 0}
+              loading={exporting}
+              disabled={busy || entries.length === 0}
               variant="plain"
               size="sm"
               fullWidth
@@ -297,6 +321,7 @@ export default function BackupScreen({ navigation }: Props) {
               label="Choose a backup file"
               onPress={() => void handleChooseFile()}
               loading={picking}
+              disabled={busy}
               variant="secondary"
               size="md"
               fullWidth
@@ -330,7 +355,7 @@ export default function BackupScreen({ navigation }: Props) {
                     label="Unlock"
                     onPress={() => void handleUnlock()}
                     loading={unlocking}
-                    disabled={!unlockPassword}
+                    disabled={!unlockPassword || busy}
                     variant="primary"
                     size="md"
                     style={styles.grow}
@@ -343,6 +368,7 @@ export default function BackupScreen({ navigation }: Props) {
                     }}
                     variant="plain"
                     size="md"
+                    disabled={unlocking}
                   />
                 </View>
               </View>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Linking, StyleSheet, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
@@ -16,14 +16,14 @@ interface Props {
   /** Whether an API key is already stored, without ever seeing the key itself. */
   hasStoredKey: boolean;
   /** Leave `key` empty to keep whatever is already stored. */
-  onSave: (config: RemoteAiConfig, key: string) => void;
-  onClearKey: () => void;
+  onSave: (config: RemoteAiConfig, key: string) => Promise<boolean>;
+  onClearKey: () => Promise<boolean>;
 }
 
 /**
  * The form for a user-configured OpenAI-compatible provider: a preset to
- * fill in the common ones, or Custom for anything else that speaks the same
- * `/chat/completions` shape (Ollama, LM Studio, a self-host). The key field
+ * fill in the common ones, or Custom for an HTTPS endpoint that speaks the
+ * same `/chat/completions` shape. The key field
  * is never prefilled with a stored key, only ever written to or left alone,
  * consistent with never displaying a secret back once it has been entered.
  */
@@ -33,15 +33,10 @@ export function RemoteAiSettings({ config, hasStoredKey, onSave, onClearKey }: P
   const [baseUrl, setBaseUrl] = useState(config?.baseUrl ?? getPreset('groq').baseUrl);
   const [model, setModel] = useState(config?.model ?? getPreset('groq').defaultModel);
   const [key, setKey] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
 
   const presetInfo = getPreset(preset);
-
-  useEffect(() => {
-    if (!config) return;
-    setPreset(config.preset);
-    setBaseUrl(config.baseUrl);
-    setModel(config.model);
-  }, [config]);
 
   const pickPreset = (next: AiProviderPreset) => {
     setPreset(next);
@@ -52,14 +47,48 @@ export function RemoteAiSettings({ config, hasStoredKey, onSave, onClearKey }: P
     }
   };
 
-  const canSave = baseUrl.trim().length > 0 && model.trim().length > 0 && (key.trim().length > 0 || hasStoredKey);
+  const normalizedBaseUrl = baseUrl.trim().replace(/\/+$/, '');
+  const storedKeyMatchesDestination =
+    hasStoredKey &&
+    !!config &&
+    config.preset === preset &&
+    config.baseUrl.trim().replace(/\/+$/, '') === normalizedBaseUrl;
+  const canSave =
+    normalizedBaseUrl.length > 0 &&
+    model.trim().length > 0 &&
+    (key.trim().length > 0 || storedKeyMatchesDestination);
 
-  const save = () => {
-    onSave(
-      { preset, label: presetInfo.label, baseUrl: baseUrl.trim(), model: model.trim() },
-      key.trim(),
-    );
-    setKey('');
+  const save = async () => {
+    if (!canSave || saving) return;
+    setSaving(true);
+    try {
+      const saved = await onSave(
+        { preset, label: presetInfo.label, baseUrl: normalizedBaseUrl, model: model.trim() },
+        key.trim(),
+      );
+      if (saved) setKey('');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const clearKey = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await onClearKey();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const openKeyPage = async () => {
+    setLinkError(null);
+    try {
+      await Linking.openURL(presetInfo.keyUrl);
+    } catch {
+      setLinkError('That key page could not be opened on this device.');
+    }
   };
 
   return (
@@ -84,13 +113,14 @@ export function RemoteAiSettings({ config, hasStoredKey, onSave, onClearKey }: P
         autoCapitalize="none"
         autoCorrect={false}
         editable={preset === 'custom'}
+        hint={preset === 'custom' ? 'Use an HTTPS OpenAI-compatible endpoint.' : undefined}
       />
 
       <Field
         label="Model"
         value={model}
         onChangeText={setModel}
-        placeholder={presetInfo.modelHint}
+        placeholder={preset === 'custom' ? 'Model name used by this endpoint' : presetInfo.modelHint}
         hint={preset !== 'custom' ? presetInfo.modelHint : undefined}
         autoCapitalize="none"
         autoCorrect={false}
@@ -100,11 +130,15 @@ export function RemoteAiSettings({ config, hasStoredKey, onSave, onClearKey }: P
         label="API key"
         value={key}
         onChangeText={setKey}
-        placeholder={hasStoredKey ? 'Saved. Leave blank to keep it.' : 'Paste your key'}
+        placeholder={storedKeyMatchesDestination ? 'Saved. Leave blank to keep it.' : 'Paste your key'}
         secureTextEntry
         autoCapitalize="none"
         autoCorrect={false}
-        hint="Stored in this phone's secure keystore, never in a backup."
+        hint={
+          hasStoredKey && !storedKeyMatchesDestination && !key.trim()
+            ? 'This is a different provider address. Enter its key before saving.'
+            : "Stored in this phone's secure keystore, never in a backup."
+        }
       />
 
       {presetInfo.keyUrl ? (
@@ -113,8 +147,14 @@ export function RemoteAiSettings({ config, hasStoredKey, onSave, onClearKey }: P
           variant="plain"
           size="sm"
           icon={<Ionicons name="open-outline" size={14} color={palette.accent} />}
-          onPress={() => void Linking.openURL(presetInfo.keyUrl)}
+          onPress={() => void openKeyPage()}
         />
+      ) : null}
+
+      {linkError ? (
+        <Type role="caption" color={palette.danger}>
+          {linkError}
+        </Type>
       ) : null}
 
       <View
@@ -125,15 +165,28 @@ export function RemoteAiSettings({ config, hasStoredKey, onSave, onClearKey }: P
       >
         <Ionicons name="cloud-upload-outline" size={15} color={palette.danger} />
         <Type role="caption" color={palette.danger} style={styles.noticeText}>
-          Note text run through the assistant will be sent to this address. Read the provider's own privacy
+          Note text run through the assistant will be sent to this address. Read the provider&apos;s own privacy
           policy before using it for anything sensitive.
         </Type>
       </View>
 
       <View style={styles.actions}>
-        <Button label="Save" variant="primary" size="sm" disabled={!canSave} onPress={save} />
+        <Button
+          label="Save"
+          variant="primary"
+          size="sm"
+          disabled={!canSave}
+          loading={saving}
+          onPress={() => void save()}
+        />
         {hasStoredKey ? (
-          <Button label="Remove key" variant="secondary" size="sm" onPress={onClearKey} />
+          <Button
+            label="Remove key"
+            variant="secondary"
+            size="sm"
+            disabled={saving}
+            onPress={() => void clearKey()}
+          />
         ) : null}
       </View>
     </View>

@@ -89,6 +89,38 @@ function engineFor(provider: VoiceProvider): DictationEngine {
   return provider === 'android' ? androidEngine : voskEngine;
 }
 
+interface SharedDictationSession {
+  owner: symbol;
+  token: number;
+  engine: DictationEngine;
+  deactivate: () => void;
+}
+
+// Native recognisers are process singletons. Navigation can keep several
+// screens mounted, so ownership must be process-wide too, not one ref per hook.
+let sharedSession: SharedDictationSession | null = null;
+
+function ownsSession(owner: symbol, token: number, engine: DictationEngine): boolean {
+  return sharedSession?.owner === owner && sharedSession.token === token && sharedSession.engine === engine;
+}
+
+function claimSession(session: SharedDictationSession): void {
+  const previous = sharedSession;
+  if (previous && (previous.owner !== session.owner || previous.token !== session.token)) {
+    sharedSession = null;
+    previous.engine.stop();
+    previous.deactivate();
+  }
+  sharedSession = session;
+}
+
+function releaseSession(owner: symbol, token: number): DictationEngine | null {
+  if (sharedSession?.owner !== owner || sharedSession.token !== token) return null;
+  const engine = sharedSession.engine;
+  sharedSession = null;
+  return engine;
+}
+
 function join(base: string, addition: string): string {
   if (!addition) return base;
   if (!base) return addition;
@@ -115,6 +147,13 @@ export function useDictation({ onText, maxLength, onDenied }: UseDictationOption
 
   const committed = useRef('');
   const lastPhrase = useRef('');
+  const livePartial = useRef('');
+  const mounted = useRef(true);
+  const owner = useRef(Symbol('dictation-owner'));
+  const nextSessionToken = useRef(1);
+  const currentSessionToken = useRef<number | null>(null);
+  const listeningRef = useRef(false);
+  const startingRef = useRef(false);
   const onTextRef = useRef(onText);
   onTextRef.current = onText;
   const onDeniedRef = useRef(onDenied);
@@ -129,12 +168,33 @@ export function useDictation({ onText, maxLength, onDenied }: UseDictationOption
     onTextRef.current(limit !== undefined ? value.slice(0, limit) : value);
   }, []);
 
+  const deactivate = useCallback(() => {
+    currentSessionToken.current = null;
+    listeningRef.current = false;
+    startingRef.current = false;
+    livePartial.current = '';
+    if (!mounted.current) return;
+    setListening(false);
+    setStarting(false);
+    setPartial('');
+  }, []);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
   useEffect(() => {
     const events = engine.events;
     if (!events) return;
 
     const commit = (json: string, source: 'result' | 'final') => {
+      const token = currentSessionToken.current;
+      if (token === null || !ownsSession(owner.current, token, engine) || !listeningRef.current) return;
       const spoken = parseSpeechResult(json).text?.trim();
+      livePartial.current = '';
       setPartial('');
       if (!spoken) return;
       // Vosk replays the last utterance through onFinalResult when listening
@@ -151,7 +211,10 @@ export function useDictation({ onText, maxLength, onDenied }: UseDictationOption
     const handleFinal = (json: string) => commit(json, 'final');
 
     const handlePartial = (json: string) => {
+      const token = currentSessionToken.current;
+      if (token === null || !ownsSession(owner.current, token, engine) || !listeningRef.current) return;
       const fragment = parseSpeechResult(json).partial?.trim() ?? '';
+      livePartial.current = fragment;
       setPartial(fragment);
       emit(join(committed.current, fragment));
     };
@@ -159,7 +222,16 @@ export function useDictation({ onText, maxLength, onDenied }: UseDictationOption
     const subscriptions = [
       events.addListener(engine.eventNames.result, handleResult),
       events.addListener(engine.eventNames.error, () => {
+        const token = currentSessionToken.current;
+        if (token === null || !ownsSession(owner.current, token, engine)) return;
+        releaseSession(owner.current, token);
+        engine.stop();
+        currentSessionToken.current = null;
+        listeningRef.current = false;
+        startingRef.current = false;
+        livePartial.current = '';
         setListening(false);
+        setStarting(false);
         setPartial('');
         onDeniedRef.current?.('failed');
       }),
@@ -178,70 +250,119 @@ export function useDictation({ onText, maxLength, onDenied }: UseDictationOption
 
   // Release the recogniser (and the microphone) when the screen goes away, or
   // when the selected engine changes out from under an active session.
-  useEffect(
-    () => () => {
-      engineRef.current.stop();
-      engineRef.current.shutdown();
-    },
-    [engine],
-  );
+  useEffect(() => {
+    const ownedEngine = engine;
+    const hookOwner = owner.current;
+    return () => {
+      const token = currentSessionToken.current;
+      if (token !== null) {
+        const released = releaseSession(hookOwner, token);
+        if (released) released.stop();
+      }
+      deactivate();
+      // Do not tear down a process singleton another mounted hook now owns.
+      if (!sharedSession || sharedSession.engine !== ownedEngine) ownedEngine.shutdown();
+    };
+  }, [deactivate, engine]);
 
   const stop = useCallback(() => {
+    const token = currentSessionToken.current;
+    if (token === null) return;
+    const active = releaseSession(owner.current, token);
+    currentSessionToken.current = null;
+    startingRef.current = false;
+    listeningRef.current = false;
+
+    // Once ownership is released, late native final events are intentionally
+    // ignored. Preserve the last visible phrase before asking native to stop.
+    const fragment = livePartial.current.trim();
+    if (fragment) {
+      committed.current = join(committed.current, fragment);
+      lastPhrase.current = fragment;
+      emit(committed.current);
+    }
+    livePartial.current = '';
     setListening(false);
+    setStarting(false);
     setPartial('');
-    engineRef.current.stop();
-  }, []);
+    active?.stop();
+  }, [emit]);
 
   const start = useCallback(async (startingText: string) => {
+    if (startingRef.current || listeningRef.current) return;
     const active = engineRef.current;
     if (!active.available) {
       onDeniedRef.current?.('unsupported');
       return;
     }
 
+    const token = nextSessionToken.current++;
+    currentSessionToken.current = token;
+    startingRef.current = true;
+    setStarting(true);
+    claimSession({ owner: owner.current, token, engine: active, deactivate });
+    const stillOwned = () => mounted.current && ownsSession(owner.current, token, active);
+
+    const deny = (reason: DictationDenial) => {
+      if (!stillOwned()) return;
+      releaseSession(owner.current, token);
+      currentSessionToken.current = null;
+      startingRef.current = false;
+      listeningRef.current = false;
+      livePartial.current = '';
+      setStarting(false);
+      setListening(false);
+      setPartial('');
+      onDeniedRef.current?.(reason);
+    };
+
     if (Platform.OS === 'android') {
       try {
         const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
+        if (!stillOwned()) return;
         if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-          onDeniedRef.current?.('no-permission');
+          deny('no-permission');
           return;
         }
       } catch {
-        onDeniedRef.current?.('no-permission');
+        deny('no-permission');
         return;
       }
     }
 
-    if (!(await active.isReady())) {
-      onDeniedRef.current?.('no-model');
-      return;
-    }
-
-    // On Vosk this is where the acoustic model loads into memory, the one
-    // step here with no fixed cost; on Android's recognizer it resolves
-    // immediately. Either way, without a visible state a slow phone just
-    // looks unresponsive between the tap and the first partial result.
-    setStarting(true);
     try {
+      if (!(await active.isReady())) {
+        deny('no-model');
+        return;
+      }
+      if (!stillOwned()) return;
       await active.prepare();
+      if (!stillOwned()) return;
       committed.current = startingText;
       lastPhrase.current = '';
+      livePartial.current = '';
       setPartial('');
+      listeningRef.current = true;
+      startingRef.current = false;
       active.start();
       setListening(true);
-    } catch {
-      onDeniedRef.current?.('failed');
-    } finally {
       setStarting(false);
+    } catch {
+      deny('failed');
+    } finally {
+      if (currentSessionToken.current === token) {
+        startingRef.current = false;
+        if (mounted.current) setStarting(false);
+      }
     }
-  }, []);
+  }, [deactivate]);
 
   const toggle = useCallback(
     async (currentText: string) => {
-      if (listening) stop();
-      else if (!starting) await start(currentText);
+      if (listeningRef.current || startingRef.current) stop();
+      else await start(currentText);
     },
-    [listening, starting, start, stop],
+    [start, stop],
   );
 
   return {

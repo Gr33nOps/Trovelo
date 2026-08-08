@@ -7,7 +7,6 @@ import {
   AskBoxSource,
   askBox,
   checkModelReady,
-  stopGeneration,
 } from '../services/ai';
 
 export type AskBoxAvailability = 'ready' | 'disabled' | 'no-model' | 'checking';
@@ -34,11 +33,15 @@ export function useAskBox(): AskBoxRunner {
   const [state, setState] = useState<AskBoxState>(IDLE);
   const [modelReady, setModelReady] = useState<boolean | null>(null);
   const mounted = useRef(true);
+  const nextRunId = useRef(1);
+  const activeRun = useRef<{ id: number; controller: AbortController } | null>(null);
 
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
+      activeRun.current?.controller.abort();
+      activeRun.current = null;
     };
   }, []);
 
@@ -67,10 +70,15 @@ export function useAskBox(): AskBoxRunner {
           ? 'ready'
           : 'no-model';
 
-  const reset = useCallback(() => setState(IDLE), []);
+  const reset = useCallback(() => {
+    activeRun.current?.controller.abort();
+    activeRun.current = null;
+    setState(IDLE);
+  }, []);
 
   const cancel = useCallback(() => {
-    stopGeneration();
+    activeRun.current?.controller.abort();
+    activeRun.current = null;
     setState((current) => ({ ...current, running: false }));
   }, []);
 
@@ -78,9 +86,26 @@ export function useAskBox(): AskBoxRunner {
     async (question: string, sources: AskBoxSource[]) => {
       const trimmed = question.trim();
       if (!trimmed) return;
+      if (activeRun.current) {
+        setState((current) => ({ ...current, error: 'One thing at a time. The assistant is still working.' }));
+        return;
+      }
+
+      if (!aiEnabled) {
+        setState({ ...IDLE, error: 'Turn on the local assistant and pick a model first.' });
+        return;
+      }
+
+      const id = nextRunId.current++;
+      const controller = new AbortController();
+      activeRun.current = { id, controller };
+      const ownsRun = () =>
+        mounted.current && activeRun.current?.id === id && !controller.signal.aborted;
 
       const path = await checkModelReady(selectedModelPath);
-      if (!aiEnabled || !path) {
+      if (!ownsRun()) return;
+      if (!path) {
+        activeRun.current = null;
         setState({ ...IDLE, error: 'Turn on the local assistant and pick a model first.' });
         return;
       }
@@ -89,16 +114,17 @@ export function useAskBox(): AskBoxRunner {
 
       try {
         const result = await askBox(trimmed, sources, path, {
+          signal: controller.signal,
           onProgress: (partial) => {
-            if (mounted.current) {
+            if (ownsRun()) {
               setState((current) => (current.running ? { ...current, answer: partial } : current));
             }
           },
         });
-        if (!mounted.current) return;
+        if (!ownsRun()) return;
         setState({ running: false, answer: result.answer, usedIds: result.usedIds, error: null });
       } catch (error) {
-        if (!mounted.current) return;
+        if (!ownsRun()) return;
         if (error instanceof AiCancelledError) {
           setState((current) => ({ ...current, running: false }));
           return;
@@ -110,6 +136,8 @@ export function useAskBox(): AskBoxRunner {
               ? error.message
               : 'That did not work this time.';
         setState({ running: false, answer: '', usedIds: [], error: message });
+      } finally {
+        if (activeRun.current?.id === id) activeRun.current = null;
       }
     },
     [aiEnabled, selectedModelPath],

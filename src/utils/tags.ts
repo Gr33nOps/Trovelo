@@ -59,9 +59,13 @@ function escapeRegExp(value: string): string {
  * with the model's own suggestions, not to replace them.
  */
 export function matchKnownTags(text: string, known: { tag: string; count: number }[]): string[] {
-  const lower = text.toLowerCase();
+  const lower = text.normalize('NFKC').toLowerCase();
   return known
-    .filter(({ tag }) => new RegExp(`\\b${escapeRegExp(tag)}\\b`, 'i').test(lower))
+    .filter(({ tag }) => {
+      const normalized = tag.normalize('NFKC').toLowerCase();
+      const boundary = '[^\\p{L}\\p{M}\\p{N}_]';
+      return new RegExp(`(?:^|${boundary})${escapeRegExp(normalized)}(?=$|${boundary})`, 'u').test(lower);
+    })
     .sort((a, b) => b.count - a.count)
     .map(({ tag }) => tag);
 }

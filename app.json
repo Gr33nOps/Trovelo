@@ -2,7 +2,7 @@
   "expo": {
     "name": "Trovelo",
     "slug": "trovelo",
-    "version": "1.13.0",
+    "version": "1.13.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.trovelo.app",
-      "buildNumber": "14",
+      "buildNumber": "15",
       "userInterfaceStyle": "automatic",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Trovelo uses the microphone so you can dictate ideas instead of typing. Speech is turned into text on this device and never leaves it.",
@@ -20,7 +20,7 @@
     },
     "android": {
       "package": "com.trovelo.app",
-      "versionCode": 14,
+      "versionCode": 15,
       "permissions": [
         "RECORD_AUDIO"
       ],
@@ -35,7 +35,6 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": true
     },
     "plugins": [

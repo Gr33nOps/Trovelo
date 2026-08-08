@@ -10,14 +10,13 @@ import React, {
 } from 'react';
 
 import { AI_MODELS, AIModelInfo } from '../constants/models';
-import { unloadModel } from '../services/ai';
+import { isGenerating, isModelLoaded, unloadModel } from '../services/ai';
 import {
   DownloadCancelledError,
   DownloadPausedError,
   ModelDownload,
   downloadModel,
   freeDiskBytes,
-  getModelPath,
   partialBytesFor,
 } from '../services/modelStore';
 import { useSettings } from './SettingsContext';
@@ -67,17 +66,23 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [partials, setPartials] = useState<Record<string, number>>({});
 
-  const handle = useRef<ModelDownload | null>(null);
+  const handle = useRef<{ id: number; download: ModelDownload } | null>(null);
+  const nextRunId = useRef(1);
+  const activeRunId = useRef<number | null>(null);
+  const busy = useRef(false);
   const mounted = useRef(true);
   const rate = useRef({ at: 0, bytes: 0, smoothed: 0 });
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
       mounted.current = false;
-      handle.current?.pause();
-    },
-    [],
-  );
+      handle.current?.download.pause();
+      handle.current = null;
+      activeRunId.current = null;
+      busy.current = false;
+    };
+  }, []);
 
   const refreshPartials = useCallback(async () => {
     const sizes = await Promise.all(
@@ -93,70 +98,79 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
 
   const startDownload = useCallback(
     async (model: AIModelInfo) => {
-      if (handle.current) return;
+      if (busy.current) return;
+      busy.current = true;
+      const id = nextRunId.current++;
+      activeRunId.current = id;
+      const ownsRun = () => mounted.current && activeRunId.current === id;
       setError(null);
 
-      const alreadyHave = await partialBytesFor(model);
-      const free = await freeDiskBytes();
-      const needed = Math.max(0, model.sizeBytes - alreadyHave);
-      if (free !== null && free < needed * 1.15) {
-        const format = (bytes: number) => `${(bytes / 1024 ** 3).toFixed(1)} GB`;
-        setError(new NotEnoughSpaceError(format(needed), format(free)).message);
-        return;
-      }
-
-      rate.current = { at: Date.now(), bytes: alreadyHave, smoothed: 0 };
-      setActive({
-        modelId: model.id,
-        modelName: model.name,
-        fraction: model.sizeBytes > 0 ? alreadyHave / model.sizeBytes : 0,
-        receivedBytes: alreadyHave,
-        totalBytes: model.sizeBytes,
-        bytesPerSecond: 0,
-        paused: false,
-      });
-
-      const download = downloadModel(model, (progress) => {
-        if (!mounted.current) return;
-        const now = Date.now();
-        const elapsed = (now - rate.current.at) / 1000;
-        let speed = rate.current.smoothed;
-        if (elapsed > 0.75) {
-          const instant = Math.max(0, progress.receivedBytes - rate.current.bytes) / elapsed;
-          // Exponential smoothing keeps the estimate from flickering.
-          speed = rate.current.smoothed === 0 ? instant : rate.current.smoothed * 0.7 + instant * 0.3;
-          rate.current = { at: now, bytes: progress.receivedBytes, smoothed: speed };
+      try {
+        const alreadyHave = await partialBytesFor(model);
+        const free = await freeDiskBytes();
+        if (!ownsRun()) return;
+        const needed = Math.max(0, model.sizeBytes - alreadyHave);
+        if (free !== null && free < needed * 1.15) {
+          const format = (bytes: number) => `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+          setError(new NotEnoughSpaceError(format(needed), format(free)).message);
+          return;
         }
+
+        rate.current = { at: Date.now(), bytes: alreadyHave, smoothed: 0 };
         setActive({
           modelId: model.id,
           modelName: model.name,
-          fraction: progress.fraction,
-          receivedBytes: progress.receivedBytes,
-          totalBytes: progress.totalBytes || model.sizeBytes,
-          bytesPerSecond: speed,
+          fraction: model.sizeBytes > 0 ? alreadyHave / model.sizeBytes : 0,
+          receivedBytes: alreadyHave,
+          totalBytes: model.sizeBytes,
+          bytesPerSecond: 0,
           paused: false,
         });
-      });
-      handle.current = download;
 
-      try {
+        const download = downloadModel(model, (progress) => {
+          if (!ownsRun() || handle.current?.id !== id) return;
+          const now = Date.now();
+          const elapsed = (now - rate.current.at) / 1000;
+          let speed = rate.current.smoothed;
+          if (elapsed > 0.75) {
+            const instant = Math.max(0, progress.receivedBytes - rate.current.bytes) / elapsed;
+            speed = rate.current.smoothed === 0 ? instant : rate.current.smoothed * 0.7 + instant * 0.3;
+            rate.current = { at: now, bytes: progress.receivedBytes, smoothed: speed };
+          }
+          setActive({
+            modelId: model.id,
+            modelName: model.name,
+            fraction: progress.fraction,
+            receivedBytes: progress.receivedBytes,
+            totalBytes: progress.totalBytes || model.sizeBytes,
+            bytesPerSecond: speed,
+            paused: false,
+          });
+        });
+        handle.current = { id, download };
+
         const path = await download.promise;
-        // Any context built from an older file at this path is now stale.
-        await unloadModel().catch(() => {});
-        if (!mounted.current) return;
+        // Only a context mapped from this exact replaced path is stale. A
+        // download for another model must not stop unrelated generation.
+        if (isModelLoaded(path) && !isGenerating()) await unloadModel();
+        if (!ownsRun() || handle.current?.id !== id) return;
         setSelectedModelPath(path);
       } catch (caught) {
-        if (!mounted.current) return;
+        if (!ownsRun()) return;
         if (caught instanceof DownloadCancelledError || caught instanceof DownloadPausedError) {
           // Both are user-initiated; the partial file state tells the story.
         } else {
           setError(caught instanceof Error ? caught.message : 'The download failed. Please try again.');
         }
       } finally {
-        handle.current = null;
-        if (mounted.current) {
-          setActive(null);
-          void refreshPartials();
+        if (activeRunId.current === id) {
+          if (handle.current?.id === id) handle.current = null;
+          activeRunId.current = null;
+          busy.current = false;
+          if (mounted.current) {
+            setActive(null);
+            void refreshPartials();
+          }
         }
       }
     },
@@ -164,12 +178,12 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
   );
 
   const pauseDownload = useCallback(() => {
-    handle.current?.pause();
+    handle.current?.download.pause();
     setActive((current) => (current ? { ...current, paused: true } : current));
   }, []);
 
   const cancelDownload = useCallback(() => {
-    handle.current?.cancel();
+    handle.current?.download.cancel();
   }, []);
 
   const dismissError = useCallback(() => setError(null), []);

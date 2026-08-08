@@ -64,12 +64,12 @@ export function pickSurprise(entries: readonly Entry[], recentIds: readonly stri
   const build = (pool: readonly Entry[]) =>
     pool.map((entry) => ({ entry, weight: weightFor(entry, now) })).filter((item) => item.weight > 0);
 
-  // Widen the net only as far as needed: unseen-recently first, then
-  // everything, then finally even the dismissed ones.
+  // Widen the net only as far as needed: unseen-recently first, then all
+  // eligible entries. Explicitly dismissed entries never resurface.
   const eligible = entries.filter((entry) => entry.kind !== 'task' && !entry.archivedAt);
   let candidates = build(eligible.filter((entry) => !recent.has(entry.id)));
   if (candidates.length === 0) candidates = build(eligible);
-  if (candidates.length === 0) return pickRandom(eligible);
+  if (candidates.length === 0) return null;
 
   const total = candidates.reduce((sum, item) => sum + item.weight, 0);
   let cursor = Math.random() * total;

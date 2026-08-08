@@ -3,7 +3,7 @@ export interface AIModelInfo {
   name: string;
   shortName: string;
   sizeLabel: string;
-  /** Approximate download size; used for the storage warning, not for validation. */
+  /** Exact pinned download size, also used to reject truncated/replaced artifacts. */
   sizeBytes: number;
   url: string;
   fileName: string;
@@ -20,9 +20,9 @@ export const AI_MODELS: AIModelInfo[] = [
     id: 'qwen2.5-0.5b',
     name: 'Qwen 2.5 · 0.5B',
     shortName: 'Qwen 0.5B',
-    sizeLabel: '491 MB',
-    sizeBytes: 491 * MB,
-    url: 'https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf',
+    sizeLabel: '469 MB',
+    sizeBytes: 491_400_032,
+    url: 'https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/6dd44a1fb35d11b5d1b28902876ce3cc9e882d0e/qwen2.5-0.5b-instruct-q4_k_m.gguf',
     fileName: 'qwen2.5-0.5b-instruct-q4_k_m.gguf',
     description: 'Quickest to answer. Good for tidying up short notes on any phone.',
     ramBytes: 700 * MB,
@@ -32,9 +32,9 @@ export const AI_MODELS: AIModelInfo[] = [
     id: 'llama3.2-1b',
     name: 'Llama 3.2 · 1B',
     shortName: 'Llama 1B',
-    sizeLabel: '808 MB',
-    sizeBytes: 808 * MB,
-    url: 'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf',
+    sizeLabel: '770 MB',
+    sizeBytes: 807_694_464,
+    url: 'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/9971ce1bbba2f8b55de026a783323a808b3eeedb/Llama-3.2-1B-Instruct-Q4_K_M.gguf',
     fileName: 'llama3.2-1b-instruct-q4_k_m.gguf',
     description: 'A good balance of quality and speed. Recommended for most phones.',
     ramBytes: 1100 * MB,
@@ -44,9 +44,9 @@ export const AI_MODELS: AIModelInfo[] = [
     id: 'qwen2.5-1.5b',
     name: 'Qwen 2.5 · 1.5B',
     shortName: 'Qwen 1.5B',
-    sizeLabel: '1.1 GB',
-    sizeBytes: 1120 * MB,
-    url: 'https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf',
+    sizeLabel: '1.0 GB',
+    sizeBytes: 1_117_320_736,
+    url: 'https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/dd26da440ef0330c47919d1ecae0966d24022222/qwen2.5-1.5b-instruct-q4_k_m.gguf',
     fileName: 'qwen2.5-1.5b-instruct-q4_k_m.gguf',
     description: 'The best writing of the three. Needs a newer phone with plenty of memory.',
     ramBytes: 1900 * MB,

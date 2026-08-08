@@ -15,6 +15,8 @@ interface Props {
   onPress: () => void;
   onLongPress?: () => void;
   onToggleDone?: () => void;
+  /** Changes at local midnight so relative dates and overdue state refresh. */
+  dayVersion?: string;
 }
 
 /** Flat list row — meta on one line, body below. No card chrome. */
@@ -107,7 +109,8 @@ export const EntryCard = memo(
     prev.folderName === next.folderName &&
     prev.onPress === next.onPress &&
     prev.onLongPress === next.onLongPress &&
-    prev.onToggleDone === next.onToggleDone,
+    prev.onToggleDone === next.onToggleDone &&
+    prev.dayVersion === next.dayVersion,
 );
 
 const styles = StyleSheet.create({

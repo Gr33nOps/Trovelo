@@ -116,7 +116,14 @@ export function Row({
 
   if (!pressable) {
     return (
-      <View testID={testID} accessible={!onPress}>
+      <View
+        testID={testID}
+        accessible={!!onPress || !right}
+        accessibilityRole={onPress ? 'button' : undefined}
+        accessibilityLabel={onPress ? (subtitle ? `${title}. ${subtitle}` : title) : undefined}
+        accessibilityHint={onPress ? accessibilityHint : undefined}
+        accessibilityState={onPress ? { disabled } : undefined}
+      >
         {body}
       </View>
     );

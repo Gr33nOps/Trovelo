@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { AppState, FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AskBoxPanel } from '../components/AskBoxPanel';
@@ -18,6 +19,7 @@ import { DictationDenial, useDictation } from '../hooks/useDictation';
 import { useHaptics } from '../hooks/useHaptics';
 import { MainTabScreenProps } from '../navigation';
 import { Entry, EntryKind, SortOrder, StatusFilter } from '../types';
+import { ActionSheet } from '../ui/ActionSheet';
 import { Button } from '../ui/Button';
 import { Chip, IconButton, TextTab } from '../ui/Controls';
 import { EmptyState } from '../ui/EmptyState';
@@ -25,6 +27,7 @@ import { Backdrop, Rule } from '../ui/Surface';
 import { Type } from '../ui/Type';
 import { searchEntries } from '../utils/search';
 import { displayTag } from '../utils/tags';
+import { todayKey } from '../utils/date';
 
 type KindFilter = 'all' | EntryKind | 'archived';
 type Props = MainTabScreenProps<'Library'>;
@@ -73,6 +76,20 @@ export default function LibraryScreen({ navigation, route }: Props) {
   const [sort, setSort] = useState<SortOrder>('newest');
   const [showAsk, setShowAsk] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [actionEntry, setActionEntry] = useState<Entry | null>(null);
+  const [dayVersion, setDayVersion] = useState(todayKey);
+
+  useEffect(() => {
+    const refreshDay = () => setDayVersion(todayKey());
+    const timer = setInterval(refreshDay, 60_000);
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refreshDay();
+    });
+    return () => {
+      clearInterval(timer);
+      subscription.remove();
+    };
+  }, []);
 
   useEffect(() => {
     if (route.params?.tag) setTagFilter(route.params.tag);
@@ -102,6 +119,16 @@ export default function LibraryScreen({ navigation, route }: Props) {
       [haptics, toast, voiceProvider],
     ),
   });
+  const stopDictation = dictation.stop;
+
+  useFocusEffect(
+    useCallback(
+      () => () => {
+        stopDictation();
+      },
+      [stopDictation],
+    ),
+  );
 
   const folderNames = useMemo(
     () => new Map(categories.map((c) => [c.id, c.name])),
@@ -153,40 +180,9 @@ export default function LibraryScreen({ navigation, route }: Props) {
   const showActions = useCallback(
     (entry: Entry) => {
       haptics.medium();
-      Alert.alert(entry.title ?? KIND_CONFIG[entry.kind ?? 'idea'].label, undefined, [
-        { text: 'Open', onPress: () => openEntry(entry) },
-        {
-          text: entry.isFavorite ? 'Unfavourite' : 'Favourite',
-          onPress: () => toggleFavorite(entry.id),
-        },
-        {
-          text: entry.isPinned ? 'Unpin' : 'Pin',
-          onPress: () => updateEntry(entry.id, { isPinned: !entry.isPinned }),
-        },
-        { text: 'Edit', onPress: () => navigation.navigate('EntryEdit', { entryId: entry.id }) },
-        {
-          text: entry.archivedAt ? 'Unarchive' : 'Archive',
-          onPress: () => {
-            updateEntry(entry.id, { archivedAt: entry.archivedAt ? null : Date.now() });
-            toast.show({ message: entry.archivedAt ? 'Unarchived.' : 'Archived.' });
-          },
-        },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            deleteEntry(entry.id);
-            toast.show({
-              message: 'Deleted.',
-              tone: 'warning',
-              action: { label: 'Undo', onPress: () => restoreEntry(entry) },
-            });
-          },
-        },
-        { text: 'Cancel', style: 'cancel' },
-      ]);
+      setActionEntry(entry);
     },
-    [haptics, openEntry, toggleFavorite, updateEntry, navigation, deleteEntry, restoreEntry, toast],
+    [haptics],
   );
 
   const renderItem = useCallback(
@@ -196,6 +192,7 @@ export default function LibraryScreen({ navigation, route }: Props) {
         folderName={item.categoryId ? folderNames.get(item.categoryId) : undefined}
         onPress={() => openEntry(item)}
         onLongPress={() => showActions(item)}
+        dayVersion={dayVersion}
         onToggleDone={
           item.kind === 'task'
             ? () => {
@@ -206,7 +203,7 @@ export default function LibraryScreen({ navigation, route }: Props) {
         }
       />
     ),
-    [folderNames, openEntry, showActions, haptics, setStatus],
+    [folderNames, openEntry, showActions, haptics, setStatus, dayVersion],
   );
 
   const activeExtra =
@@ -367,6 +364,7 @@ export default function LibraryScreen({ navigation, route }: Props) {
         data={filtered}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
+        extraData={dayVersion}
         ListHeaderComponent={header}
         contentContainerStyle={[styles.list, { paddingBottom: tabBarHeight + spacing.xl }]}
         ItemSeparatorComponent={() => <Rule />}
@@ -398,6 +396,50 @@ export default function LibraryScreen({ navigation, route }: Props) {
               }}
             />
           )
+        }
+      />
+      <ActionSheet
+        visible={actionEntry !== null}
+        title={actionEntry?.title ?? (actionEntry ? KIND_CONFIG[actionEntry.kind ?? 'idea'].label : 'Entry')}
+        onClose={() => setActionEntry(null)}
+        actions={
+          actionEntry
+            ? [
+                { label: 'Open', onPress: () => openEntry(actionEntry) },
+                {
+                  label: actionEntry.isFavorite ? 'Unfavourite' : 'Favourite',
+                  onPress: () => toggleFavorite(actionEntry.id),
+                },
+                {
+                  label: actionEntry.isPinned ? 'Unpin' : 'Pin',
+                  onPress: () => updateEntry(actionEntry.id, { isPinned: !actionEntry.isPinned }),
+                },
+                {
+                  label: 'Edit',
+                  onPress: () => navigation.navigate('EntryEdit', { entryId: actionEntry.id }),
+                },
+                {
+                  label: actionEntry.archivedAt ? 'Unarchive' : 'Archive',
+                  onPress: () => {
+                    updateEntry(actionEntry.id, { archivedAt: actionEntry.archivedAt ? null : Date.now() });
+                    toast.show({ message: actionEntry.archivedAt ? 'Unarchived.' : 'Archived.' });
+                  },
+                },
+                {
+                  label: 'Delete',
+                  destructive: true,
+                  onPress: () => {
+                    const snapshot = actionEntry;
+                    deleteEntry(snapshot.id);
+                    toast.show({
+                      message: 'Deleted.',
+                      tone: 'warning',
+                      action: { label: 'Undo', onPress: () => restoreEntry(snapshot) },
+                    });
+                  },
+                },
+              ]
+            : []
         }
       />
     </Backdrop>

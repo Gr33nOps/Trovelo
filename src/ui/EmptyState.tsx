@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { spacing } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
@@ -7,7 +8,7 @@ import { Button } from './Button';
 import { Type } from './Type';
 
 interface Props {
-  icon?: string;
+  icon?: keyof typeof Ionicons.glyphMap;
   title: string;
   subtitle?: string;
   actionLabel?: string;
@@ -16,8 +17,9 @@ interface Props {
   onSecondary?: () => void;
 }
 
-/** Minimal empty state — title, subtitle, one action. No icon medallion. */
+/** Minimal empty state — optional icon, title, subtitle and focused actions. */
 export function EmptyState({
+  icon,
   title,
   subtitle,
   actionLabel,
@@ -29,6 +31,7 @@ export function EmptyState({
 
   return (
     <View style={styles.wrap} accessibilityRole="summary">
+      {icon ? <Ionicons name={icon} size={30} color={palette.inkFaint} accessibilityElementsHidden /> : null}
       <Type role="heading" align="center">
         {title}
       </Type>

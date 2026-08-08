@@ -6,22 +6,35 @@ on:
       - 'v*'
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
-  release:
-    name: Build APK and create release
+  build:
+    name: Verify and build signed APK
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    env:
+      NODE_ENV: production
+      TROVELO_UPLOAD_KEYSTORE_BASE64: ${{ secrets.TROVELO_UPLOAD_KEYSTORE_BASE64 }}
+      ORG_GRADLE_PROJECT_TROVELO_UPLOAD_STORE_PASSWORD: ${{ secrets.TROVELO_UPLOAD_STORE_PASSWORD }}
+      ORG_GRADLE_PROJECT_TROVELO_UPLOAD_KEY_ALIAS: ${{ secrets.TROVELO_UPLOAD_KEY_ALIAS }}
+      ORG_GRADLE_PROJECT_TROVELO_UPLOAD_KEY_PASSWORD: ${{ secrets.TROVELO_UPLOAD_KEY_PASSWORD }}
+      GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx3g
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: npm
@@ -29,28 +42,90 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Verify tag and project metadata
+        run: npm run verify:project
+
+      - name: Run quality gates
+        run: |
+          npm run lint
+          npm run typecheck
+          npm test
+          npm run audit:deps
+          npm run doctor
+          npm run bundle:check
+
       - name: Set up Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           distribution: temurin
           java-version: 17
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
 
-      - name: Point Gradle at the Android SDK
-        run: echo "sdk.dir=$ANDROID_HOME" > android/local.properties
-
-      - name: Build release APK
+      - name: Configure protected release signing
         run: |
-          sed -i 's|org.gradle.jvmargs=.*|org.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g|' android/gradle.properties
-          ./android/gradlew -p android assembleRelease
+          test -n "$TROVELO_UPLOAD_KEYSTORE_BASE64"
+          test -n "$ORG_GRADLE_PROJECT_TROVELO_UPLOAD_STORE_PASSWORD"
+          test -n "$ORG_GRADLE_PROJECT_TROVELO_UPLOAD_KEY_ALIAS"
+          test -n "$ORG_GRADLE_PROJECT_TROVELO_UPLOAD_KEY_PASSWORD"
+          printf '%s' "$TROVELO_UPLOAD_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/trovelo-upload.keystore"
+          test -s "$RUNNER_TEMP/trovelo-upload.keystore"
+          printf 'sdk.dir=%s\n' "$ANDROID_HOME" > android/local.properties
+          echo "ORG_GRADLE_PROJECT_TROVELO_UPLOAD_STORE_FILE=$RUNNER_TEMP/trovelo-upload.keystore" >> "$GITHUB_ENV"
+
+      - name: Build signed release APK
+        run: ./android/gradlew -p android assembleRelease --no-daemon
+
+      - name: Verify signature and stage release files
+        id: stage
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          mkdir -p "$RUNNER_TEMP/release"
+          cp android/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/release/trovelo-$version.apk"
+          echo "apk_path=$RUNNER_TEMP/release/trovelo-$version.apk" >> "$GITHUB_OUTPUT"
+          apksigner_path="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -x "$apksigner_path"
+          "$apksigner_path" verify --verbose --print-certs "$RUNNER_TEMP/release/trovelo-$version.apk" | tee "$RUNNER_TEMP/release/signature.txt"
+          if grep -q 'CN=Android Debug' "$RUNNER_TEMP/release/signature.txt"; then
+            echo 'Refusing to publish an APK signed with the public Android debug certificate.' >&2
+            exit 1
+          fi
+          cd "$RUNNER_TEMP/release"
+          sha256sum "trovelo-$version.apk" > "trovelo-$version.apk.sha256"
+          npm sbom --prefix "$GITHUB_WORKSPACE" --sbom-format cyclonedx > "trovelo-$version.cdx.json"
+
+      - name: Attest APK provenance
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
+        with:
+          subject-path: ${{ steps.stage.outputs.apk_path }}
+
+      - name: Upload verified release files
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: trovelo-release
+          path: ${{ runner.temp }}/release/*
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish GitHub release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download verified release files
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: trovelo-release
+          path: release
 
       - name: Create release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
-          files: android/app/build/outputs/apk/release/app-release.apk
+          files: release/*
           generate_release_notes: true

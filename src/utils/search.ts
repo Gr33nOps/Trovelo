@@ -7,7 +7,7 @@ const STOP_WORDS = new Set([
 ]);
 
 function words(text: string): string[] {
-  return text.toLowerCase().match(/[a-z0-9']+/g) ?? [];
+  return text.normalize('NFKC').toLowerCase().match(/[\p{L}\p{M}\p{N}']+/gu) ?? [];
 }
 
 /**

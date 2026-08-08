@@ -1,3 +1,5 @@
+export { ActionSheet } from './ActionSheet';
+export type { ActionSheetItem } from './ActionSheet';
 export { Button } from './Button';
 export type { ButtonProps, ButtonSize, ButtonVariant } from './Button';
 export { Badge, Chip, IconButton, ProgressBar, Segmented, TextTab } from './Controls';

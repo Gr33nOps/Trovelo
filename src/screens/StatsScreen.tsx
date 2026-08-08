@@ -45,14 +45,21 @@ export default function StatsScreen({ navigation }: Props) {
       rediscoveries += entry.timesRediscovered;
       if (entry.isFavorite) favorites += 1;
       if (entry.archivedAt) archived += 1;
-      if (entry.kind === 'task' && entry.status !== 'done') openTasks += 1;
+      if (!entry.archivedAt && entry.kind === 'task' && entry.status !== 'done') openTasks += 1;
       words += entry.text.trim().split(/\s+/).filter(Boolean).length;
       if (now - entry.createdAt < 30 * DAY) addedThisMonth += 1;
-      const lastSeen = entry.lastViewedAt ?? entry.createdAt;
-      if (oldestUnseen === null || lastSeen < oldestUnseen) oldestUnseen = lastSeen;
+      const eligibleForRediscovery =
+        entry.kind !== 'task' && !entry.archivedAt && entry.status !== 'not_useful';
+      if (eligibleForRediscovery) {
+        const lastSeen = entry.lastViewedAt ?? entry.createdAt;
+        if (oldestUnseen === null || lastSeen < oldestUnseen) oldestUnseen = lastSeen;
+      }
     }
 
-    const neverSeen = entries.filter((entry) => !entry.lastViewedAt).length;
+    const rediscoverable = entries.filter(
+      (entry) => entry.kind !== 'task' && !entry.archivedAt && entry.status !== 'not_useful',
+    );
+    const neverSeen = rediscoverable.filter((entry) => !entry.lastViewedAt).length;
 
     return {
       total: entries.length,
@@ -63,6 +70,7 @@ export default function StatsScreen({ navigation }: Props) {
       words,
       addedThisMonth,
       neverSeen,
+      rediscoverable: rediscoverable.length,
       openTasks,
       archived,
       oldestUnseenDays:
@@ -217,13 +225,17 @@ export default function StatsScreen({ navigation }: Props) {
               text={
                 stats.neverSeen > 0
                   ? `${stats.neverSeen} ${stats.neverSeen === 1 ? 'entry has' : 'entries have'} never come back out of the box.`
-                  : 'Everything in your box has resurfaced at least once.'
+                  : stats.rediscoverable > 0
+                    ? 'Everything eligible for rediscovery has resurfaced at least once.'
+                    : 'Nothing is currently waiting to be rediscovered.'
               }
             />
-            <Insight
-              icon="time-outline"
-              text={`The entry you have not seen for longest has been waiting ${stats.oldestUnseenDays} ${stats.oldestUnseenDays === 1 ? 'day' : 'days'}.`}
-            />
+            {stats.rediscoverable > 0 ? (
+              <Insight
+                icon="time-outline"
+                text={`The entry you have not seen for longest has been waiting ${stats.oldestUnseenDays} ${stats.oldestUnseenDays === 1 ? 'day' : 'days'}.`}
+              />
+            ) : null}
             <Insight
               icon="add-circle-outline"
               text={`${stats.addedThisMonth} ${stats.addedThisMonth === 1 ? 'entry' : 'entries'} added in the last 30 days.`}

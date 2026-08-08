@@ -128,6 +128,7 @@ export function Button({
         onPressIn={() => !inert && animate(1)}
         onPressOut={() => animate(0)}
         disabled={inert}
+        hitSlop={size === 'sm' ? 4 : undefined}
         testID={testID}
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel ?? label}

@@ -6,7 +6,6 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import {
   HIT_SLOP,
   MIN_TOUCH,
-  contrastingInk,
   radius as radii,
   spacing,
   withAlpha,
@@ -241,6 +240,7 @@ export function ProgressBar({
             styles.progressFill,
             {
               width: indeterminate ? '100%' : `${clamped * 100}%`,
+              minWidth: indeterminate || clamped > 0 ? 10 : 0,
               backgroundColor: palette.accent,
               borderRadius: radii.pill,
               opacity: indeterminate ? 0.4 : 1,
@@ -382,7 +382,6 @@ const styles = StyleSheet.create({
   },
   progressFill: {
     height: '100%',
-    minWidth: 10,
     overflow: 'hidden',
   },
   progressLabel: {

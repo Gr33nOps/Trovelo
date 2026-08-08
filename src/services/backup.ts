@@ -27,8 +27,11 @@ const BACKUP_VERSION = 2;
  * existing backups.
  */
 const PBKDF2_ITERATIONS = 150_000;
-/** Legacy v1 files used crypto-js defaults: SHA-1, 10k iterations. */
+const MIN_PBKDF2_ITERATIONS = 100_000;
+const MAX_PBKDF2_ITERATIONS = 600_000;
+/** Legacy v1 files used PBKDF2-HMAC-SHA1 with 10k iterations. */
 const LEGACY_ITERATIONS = 10_000;
+const MAX_PASSWORD_LENGTH = 1024;
 
 const KEY_BYTES = 32;
 const MAC_BYTES = 32;
@@ -61,6 +64,13 @@ export class WrongPasswordError extends Error {
   }
 }
 
+export class DamagedBackupError extends Error {
+  constructor(message = 'That backup is damaged.') {
+    super(message);
+    this.name = 'DamagedBackupError';
+  }
+}
+
 /* ------------------------------------------------------------- primitives -- */
 
 /**
@@ -86,6 +96,47 @@ const b64 = {
   encode: (value: WordArray) => CryptoJS.enc.Base64.stringify(value),
   decode: (value: string) => CryptoJS.enc.Base64.parse(value),
 };
+
+const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
+
+function decodeBase64(value: string, expectedBytes?: number): WordArray {
+  if (!value || value.length % 4 !== 0 || !BASE64.test(value)) throw new DamagedBackupError();
+  const decoded = b64.decode(value);
+  if (expectedBytes !== undefined && decoded.sigBytes !== expectedBytes) throw new DamagedBackupError();
+  return decoded;
+}
+
+function cachePath(fileName: string): string {
+  const dir = FileSystem.cacheDirectory;
+  if (!dir) throw new Error('This device has no writable cache for this file operation.');
+  return `${dir}${fileName}`;
+}
+
+function serializedBytes(value: string): number {
+  let bytes = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code < 0x80) bytes += 1;
+    else if (code < 0x800) bytes += 2;
+    else if (code >= 0xd800 && code <= 0xdbff && index + 1 < value.length) {
+      const next = value.charCodeAt(index + 1);
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        bytes += 4;
+        index += 1;
+      } else {
+        bytes += 3;
+      }
+    } else bytes += 3;
+    if (bytes > MAX_BACKUP_BYTES) return bytes;
+  }
+  return bytes;
+}
+
+function assertBackupSize(size: number): void {
+  if (!Number.isFinite(size) || size < 0 || size > MAX_BACKUP_BYTES) {
+    throw new Error('That file is too large to be a Trovelo backup.');
+  }
+}
 
 /**
  * PBKDF2-HMAC-SHA256, written out from RFC 8018 so the iteration loop can
@@ -173,28 +224,64 @@ function sanitizeInner(raw: unknown): BackupContents {
     throw new Error('That backup could not be read.');
   }
   const obj = raw as Record<string, unknown>;
-  if ((obj.app !== INNER_APP && obj.app !== LEGACY_INNER_APP) || !Array.isArray(obj.entries)) {
+  if (obj.app !== INNER_APP && obj.app !== LEGACY_INNER_APP) {
     throw new Error('That file is not a Trovelo backup.');
   }
 
-  const entries = obj.entries
-    .map(normalizeEntry)
-    .filter((entry): entry is Entry => entry !== null);
+  if (obj.app === INNER_APP && obj.version !== BACKUP_VERSION) {
+    if (typeof obj.version === 'number' && obj.version > BACKUP_VERSION) {
+      throw new Error('This backup was made by a newer version of Trovelo. Update the app and try again.');
+    }
+    throw new DamagedBackupError('This backup format is not supported by this version of Trovelo.');
+  }
+  if (
+    obj.app === LEGACY_INNER_APP &&
+    obj.version !== undefined &&
+    (typeof obj.version !== 'number' || obj.version < 1 || obj.version > BACKUP_VERSION)
+  ) {
+    throw new Error('This backup format is not supported by this version of Trovelo.');
+  }
+  if (!Array.isArray(obj.entries)) throw new DamagedBackupError();
+  if (obj.app === INNER_APP && !Array.isArray(obj.categories)) throw new DamagedBackupError();
+  if (
+    obj.app === INNER_APP &&
+    (typeof obj.createdAt !== 'number' || !Number.isFinite(obj.createdAt))
+  ) {
+    throw new DamagedBackupError();
+  }
 
-  const categories = Array.isArray(obj.categories)
-    ? obj.categories.map(normalizeCategory).filter((c): c is Category => c !== null)
-    : [];
+  const entryIds = new Set<string>();
+  const entries: Entry[] = [];
+  for (const rawEntry of obj.entries) {
+    const entry = normalizeEntry(rawEntry);
+    if (!entry || entryIds.has(entry.id)) continue;
+    entryIds.add(entry.id);
+    entries.push(entry);
+  }
+
+  const categoryIds = new Set<string>();
+  const categories: Category[] = [];
+  if (Array.isArray(obj.categories)) {
+    for (const rawCategory of obj.categories) {
+      const category = normalizeCategory(rawCategory);
+      if (!category || categoryIds.has(category.id)) continue;
+      categoryIds.add(category.id);
+      categories.push(category);
+    }
+  }
 
   let preferences: Preferences | undefined;
   const p = obj.preferences as Record<string, unknown> | undefined;
   if (p && (p.themeMode === 'system' || p.themeMode === 'light' || p.themeMode === 'dark')) {
-    const num = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
+    const num = (value: unknown) =>
+      typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+    const streak = num(p.streak);
     preferences = {
       themeMode: p.themeMode,
       accentId: isAccentId(p.accentId) ? p.accentId : DEFAULT_ACCENT_ID,
-      streak: num(p.streak),
+      streak,
       lastOpenDay: typeof p.lastOpenDay === 'string' ? p.lastOpenDay : null,
-      bestStreak: num(p.bestStreak),
+      bestStreak: Math.max(streak, num(p.bestStreak)),
       daysOpened: num(p.daysOpened),
       onboarded: p.onboarded === true,
     };
@@ -204,7 +291,8 @@ function sanitizeInner(raw: unknown): BackupContents {
     entries,
     categories,
     preferences,
-    createdAt: typeof obj.createdAt === 'number' ? obj.createdAt : undefined,
+    createdAt:
+      typeof obj.createdAt === 'number' && Number.isFinite(obj.createdAt) ? obj.createdAt : undefined,
   };
 }
 
@@ -225,6 +313,9 @@ export async function createBackupFile(
   options: CreateBackupOptions = {},
 ): Promise<{ uri: string; fileName: string }> {
   const { password, onProgress } = options;
+  if (password && password.length > MAX_PASSWORD_LENGTH) {
+    throw new Error('That backup password is too long.');
+  }
 
   const inner: Record<string, unknown> = {
     app: INNER_APP,
@@ -235,6 +326,7 @@ export async function createBackupFile(
   };
   if (preferences) inner.preferences = preferences;
   const plaintext = JSON.stringify(inner);
+  assertBackupSize(serializedBytes(plaintext));
 
   let file: BackupFileV2;
   if (password) {
@@ -277,8 +369,10 @@ export async function createBackupFile(
   }
 
   const fileName = `trovelo-${formatDate(new Date())}${password ? '-locked' : ''}.json`;
-  const uri = `${FileSystem.cacheDirectory ?? ''}${fileName}`;
-  await FileSystem.writeAsStringAsync(uri, JSON.stringify(file));
+  const uri = cachePath(fileName);
+  const serialized = JSON.stringify(file);
+  assertBackupSize(serializedBytes(serialized));
+  await FileSystem.writeAsStringAsync(uri, serialized);
   return { uri, fileName };
 }
 
@@ -291,16 +385,12 @@ export async function createBackupFile(
 export async function cleanBackupCache(): Promise<void> {
   const dir = FileSystem.cacheDirectory;
   if (!dir) return;
-  try {
-    const names = await FileSystem.readDirectoryAsync(dir);
-    await Promise.all(
-      names
-        .filter((name) => name.startsWith('trovelo-') || name.startsWith('serendipity-box-') || name.startsWith('serendipity-open-'))
-        .map((name) => FileSystem.deleteAsync(`${dir}${name}`, { idempotent: true }).catch(() => {})),
-    );
-  } catch {
-    // Nothing to clean, or the directory is unreadable. Neither is fatal.
-  }
+  const names = await FileSystem.readDirectoryAsync(dir);
+  await Promise.all(
+    names
+      .filter((name) => name.startsWith('trovelo-') || name.startsWith('serendipity-box-') || name.startsWith('serendipity-open-'))
+      .map((name) => FileSystem.deleteAsync(`${dir}${name}`, { idempotent: true })),
+  );
 }
 
 export interface OpenBackupOptions {
@@ -308,27 +398,60 @@ export interface OpenBackupOptions {
   onProgress?: (fraction: number) => void;
 }
 
+async function knownFileSize(uri: string): Promise<number | null> {
+  try {
+    const info = await FileSystem.getInfoAsync(uri);
+    if (!info.exists) return null;
+    if (info.isDirectory) throw new DamagedBackupError('Choose a backup file, not a folder.');
+    const size = (info as { size?: unknown }).size;
+    return typeof size === 'number' && Number.isFinite(size) && size >= 0 ? size : null;
+  } catch (error) {
+    if (error instanceof DamagedBackupError) throw error;
+    return null;
+  }
+}
+
 export async function openBackupFile(uri: string, options: OpenBackupOptions = {}): Promise<BackupContents> {
   const { password, onProgress } = options;
-
-  const info = await FileSystem.getInfoAsync(uri);
-  const size = (info as { size?: number }).size ?? 0;
-  if (size > MAX_BACKUP_BYTES) {
-    throw new Error('That file is too large to be a Trovelo backup.');
+  if (password && password.length > MAX_PASSWORD_LENGTH) {
+    throw new Error('That backup password is too long.');
   }
 
-  let content: string;
   let scratch: string | null = null;
-  try {
-    content = await FileSystem.readAsStringAsync(uri);
-  } catch {
-    // Some providers hand back a URI that only `copyAsync` can read.
-    scratch = `${FileSystem.cacheDirectory ?? ''}trovelo-open-${Date.now()}.json`;
-    await FileSystem.copyAsync({ from: uri, to: scratch });
-    content = await FileSystem.readAsStringAsync(scratch);
-  }
+  const copyToCheckedScratch = async (): Promise<string> => {
+    if (scratch) return scratch;
+    scratch = cachePath(`trovelo-open-${Date.now()}-${Math.random().toString(36).slice(2, 10)}.json`);
+    try {
+      await FileSystem.copyAsync({ from: uri, to: scratch });
+    } catch {
+      throw new DamagedBackupError('That backup could not be read.');
+    }
+    const copiedSize = await knownFileSize(scratch);
+    if (copiedSize === null) throw new DamagedBackupError('That backup could not be read.');
+    assertBackupSize(copiedSize);
+    return scratch;
+  };
 
   try {
+    const originalSize = await knownFileSize(uri);
+    if (originalSize !== null) assertBackupSize(originalSize);
+    let source = uri;
+    if (originalSize === null || uri.startsWith('content:')) {
+      // A content provider may not expose metadata. Copying first gives us a
+      // real file whose size can be enforced before any JSON reaches memory.
+      source = await copyToCheckedScratch();
+    }
+
+    let content: string;
+    try {
+      content = await FileSystem.readAsStringAsync(source);
+    } catch {
+      if (source !== uri) throw new DamagedBackupError('That backup could not be read.');
+      source = await copyToCheckedScratch();
+      content = await FileSystem.readAsStringAsync(source);
+    }
+    // Also protect platforms that report an inaccurate file size.
+    assertBackupSize(serializedBytes(content));
     return await parseBackup(content, password, onProgress);
   } finally {
     if (scratch) await FileSystem.deleteAsync(scratch, { idempotent: true }).catch(() => {});
@@ -353,80 +476,135 @@ async function parseBackup(
   const file = parsed as Record<string, unknown>;
 
   if (file.app === BACKUP_APP || file.app === LEGACY_APP) {
-    if (file.protected !== true) {
-      if (typeof file.data !== 'string') throw new Error('That backup is damaged.');
-      return sanitizeInner(safeParse(file.data));
+    const version =
+      file.app === LEGACY_APP && file.version === undefined
+        ? 1
+        : typeof file.version === 'number' && Number.isInteger(file.version)
+          ? file.version
+          : null;
+    if (
+      version === null ||
+      version < 1 ||
+      version > BACKUP_VERSION ||
+      (file.app === BACKUP_APP && version !== BACKUP_VERSION)
+    ) {
+      throw new Error('This backup format is not supported by this version of Trovelo.');
     }
+    const protectedFlag =
+      file.app === LEGACY_APP && file.protected === undefined ? false : file.protected;
+    if (typeof protectedFlag !== 'boolean') throw new DamagedBackupError();
+    if (typeof file.data !== 'string' || !file.data) throw new DamagedBackupError();
+
+    if (!protectedFlag) return sanitizeInner(parsePlainJson(file.data));
     if (!password) throw new LockedBackupError();
-    return sanitizeInner(safeParse(await decrypt(file, password, onProgress)));
+    const plaintext = await decrypt(file, version, password, onProgress);
+    return sanitizeInner(version === 1 ? parseLegacyDecryptedJson(plaintext) : parsePlainJson(plaintext));
   }
 
   // The very first release wrote a flat `{ marker, entries }` file.
   if (file.marker === LEGACY_MARKER && Array.isArray(file.entries)) {
-    return sanitizeInner({ app: INNER_APP, entries: file.entries });
+    return sanitizeInner({ app: LEGACY_INNER_APP, entries: file.entries });
   }
 
   throw new Error('That file is not a Trovelo backup.');
 }
 
-function safeParse(json: string): unknown {
+function parsePlainJson(json: string): unknown {
   try {
     return JSON.parse(json);
   } catch {
+    throw new DamagedBackupError();
+  }
+}
+
+function parseLegacyDecryptedJson(json: string): unknown {
+  try {
+    return JSON.parse(json);
+  } catch {
+    // V1 had no MAC, so invalid plaintext is the only reliable indication that
+    // the supplied password did not derive the right key.
     throw new WrongPasswordError();
   }
 }
 
 async function decrypt(
   file: Record<string, unknown>,
+  version: number,
   password: string,
   onProgress?: (fraction: number) => void,
 ): Promise<string> {
   const data = typeof file.data === 'string' ? file.data : '';
   const ivB64 = typeof file.iv === 'string' ? file.iv : '';
-  if (!data || !ivB64) throw new Error('That backup is damaged.');
-  const iv = b64.decode(ivB64);
+  if (!data || !ivB64) throw new DamagedBackupError();
 
-  const version = typeof file.version === 'number' ? file.version : 1;
-
-  if (version >= 2) {
-    const kdf = file.kdf as { iterations?: unknown; salt?: unknown } | undefined;
+  if (version === 2) {
+    if (file.cipher !== 'AES-256-CBC') throw new DamagedBackupError();
+    if (typeof file.kdf !== 'object' || file.kdf === null || Array.isArray(file.kdf)) {
+      throw new DamagedBackupError();
+    }
+    const kdf = file.kdf as { algo?: unknown; iterations?: unknown; salt?: unknown };
+    if (kdf.algo !== 'PBKDF2-SHA256') throw new DamagedBackupError();
     const saltB64 = typeof kdf?.salt === 'string' ? kdf.salt : '';
-    const iterations =
-      typeof kdf?.iterations === 'number' && kdf.iterations > 0 && kdf.iterations <= 2_000_000
-        ? kdf.iterations
-        : PBKDF2_ITERATIONS;
-    if (!saltB64) throw new Error('That backup is damaged.');
+    const iterations = kdf.iterations;
+    if (
+      typeof iterations !== 'number' ||
+      !Number.isInteger(iterations) ||
+      iterations < MIN_PBKDF2_ITERATIONS ||
+      iterations > MAX_PBKDF2_ITERATIONS
+    ) {
+      throw new DamagedBackupError();
+    }
 
-    const material = await deriveKey(password, b64.decode(saltB64), iterations, KEY_BYTES + MAC_BYTES, onProgress);
+    const salt = decodeBase64(saltB64, SALT_BYTES);
+    const iv = decodeBase64(ivB64, IV_BYTES);
+    const ciphertext = decodeBase64(data);
+    if (ciphertext.sigBytes === 0 || ciphertext.sigBytes % IV_BYTES !== 0) {
+      throw new DamagedBackupError();
+    }
+    const expectedMac = typeof file.mac === 'string' ? file.mac : '';
+    decodeBase64(expectedMac, MAC_BYTES);
+
+    const material = await deriveKey(password, salt, iterations, KEY_BYTES + MAC_BYTES, onProgress);
     const { encKey, macKey } = splitKey(material);
 
-    const expectedMac = typeof file.mac === 'string' ? file.mac : '';
     if (!expectedMac || !macEquals(expectedMac, computeMac(macKey, version, saltB64, ivB64, data))) {
       // Either the password is wrong or the file was altered. Both mean stop.
       throw new WrongPasswordError();
     }
 
-    const decrypted = CryptoJS.AES.decrypt(
-      CryptoJS.lib.CipherParams.create({ ciphertext: b64.decode(data) }),
-      encKey,
-      { iv, mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.Pkcs7 },
-    );
-    const text = decrypted.toString(CryptoJS.enc.Utf8);
-    if (!text) throw new WrongPasswordError();
+    let text: string;
+    try {
+      const decrypted = CryptoJS.AES.decrypt(
+        CryptoJS.lib.CipherParams.create({ ciphertext }),
+        encKey,
+        { iv, mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.Pkcs7 },
+      );
+      text = decrypted.toString(CryptoJS.enc.Utf8);
+    } catch {
+      throw new DamagedBackupError();
+    }
+    if (!text) throw new DamagedBackupError();
     return text;
   }
 
-  // v1: crypto-js defaults (SHA-1 PBKDF2, 10k, OpenSSL-serialised ciphertext).
+  // v1: PBKDF2-HMAC-SHA1, 10k iterations, OpenSSL-serialised ciphertext.
   const saltB64 = typeof file.salt === 'string' ? file.salt : '';
-  if (!saltB64) throw new Error('That backup is damaged.');
+  if (!saltB64) throw new DamagedBackupError();
+  const salt = decodeBase64(saltB64, SALT_BYTES);
+  const iv = decodeBase64(ivB64, IV_BYTES);
   onProgress?.(0.5);
-  const legacyKey = CryptoJS.PBKDF2(password, b64.decode(saltB64), {
+  const legacyKey = CryptoJS.PBKDF2(password, salt, {
     keySize: KEY_BYTES / 4,
     iterations: LEGACY_ITERATIONS,
+    hasher: CryptoJS.algo.SHA1,
   });
   onProgress?.(1);
-  const text = CryptoJS.AES.decrypt(data, legacyKey, { iv }).toString(CryptoJS.enc.Utf8);
+  let text: string;
+  try {
+    text = CryptoJS.AES.decrypt(data, legacyKey, { iv }).toString(CryptoJS.enc.Utf8);
+  } catch {
+    throw new WrongPasswordError();
+  }
   if (!text) throw new WrongPasswordError();
   return text;
 }
@@ -453,7 +631,7 @@ export async function createMarkdownExport(
   }
 
   const fileName = `trovelo-${formatDate(new Date())}.md`;
-  const uri = `${FileSystem.cacheDirectory ?? ''}${fileName}`;
+  const uri = cachePath(fileName);
   await FileSystem.writeAsStringAsync(uri, lines.join('\n'));
   return { uri, fileName };
 }

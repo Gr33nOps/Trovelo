@@ -1,11 +1,13 @@
 # Roadmap: Trovelo v2
 
+> Historical design record. The six phases described below were subsequently implemented; use
+> the README and current source as the authority for shipped behavior and release instructions.
+
 A review of the LocalMind proposal against what this app already is, and a
 build plan for the parts worth taking.
 
-Current state: v1.1.0, 9,600 lines of TypeScript, 46.6 MB APK, one content
-type (`Entry`), nine screens, on-device LLM with six tasks, offline dictation,
-encrypted backups.
+Current state: v1.13.1, four entry kinds backed by one `Entry` model, on-device or opt-in remote
+AI, offline dictation, and encrypted backups.
 
 ---
 

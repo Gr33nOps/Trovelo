@@ -1,5 +1,5 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AppState, Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,7 +14,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useHaptics } from '../hooks/useHaptics';
 import { MainTabScreenProps } from '../navigation';
-import { Entry, EntryKind, EntryStatus } from '../types';
+import { EntryKind, EntryStatus } from '../types';
 import { Button } from '../ui/Button';
 import { IconButton } from '../ui/Controls';
 import { EmptyState } from '../ui/EmptyState';
@@ -26,7 +26,6 @@ import {
   formatDate,
   formatDueLabel,
   isOnThisDay,
-  todayKey,
   yearsAgo,
 } from '../utils/date';
 import { pickSurprise } from '../utils/random';
@@ -45,28 +44,61 @@ export default function HomeScreen({ navigation }: Props) {
   const [revealedId, setRevealedId] = useState<string | null>(null);
   const recentlyShown = useRef<string[]>([]);
   const [memoryDismissed, setMemoryDismissed] = useState(false);
+  const [now, setNow] = useState(Date.now());
+  const currentDay = dayKey(new Date(now));
+
+  useEffect(() => {
+    const refreshClock = () => setNow(Date.now());
+    const timer = setInterval(refreshClock, 60_000);
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refreshClock();
+    });
+    return () => {
+      clearInterval(timer);
+      subscription.remove();
+    };
+  }, []);
+
+  useEffect(() => setMemoryDismissed(false), [currentDay]);
 
   const todayJournal = useMemo(
-    () => entries.find((e) => e.kind === 'journal' && dayKey(new Date(e.createdAt)) === todayKey()),
-    [entries],
+    () =>
+      entries.find(
+        (entry) =>
+          entry.kind === 'journal' && !entry.archivedAt && dayKey(new Date(entry.createdAt)) === currentDay,
+      ),
+    [entries, currentDay],
   );
 
   const todayItems = useMemo(() => {
-    const now = Date.now();
     const due = entries
-      .filter((e) => e.kind === 'task' && e.status !== 'done' && e.dueAt !== undefined && daysUntil(e.dueAt) <= 0)
+      .filter(
+        (entry) =>
+          !entry.archivedAt &&
+          entry.kind === 'task' &&
+          entry.status !== 'done' &&
+          entry.dueAt !== undefined &&
+          daysUntil(entry.dueAt, new Date(now)) <= 0,
+      )
       .sort((a, b) => (a.dueAt ?? 0) - (b.dueAt ?? 0))
       .map((entry) => ({ entry, reason: 'due' as const }));
     const reminders = entries
-      .filter((e) => e.remindAt !== undefined && e.remindAt <= now)
+      .filter((entry) => !entry.archivedAt && entry.remindAt !== undefined && entry.remindAt <= now)
       .sort((a, b) => (a.remindAt ?? 0) - (b.remindAt ?? 0))
       .map((entry) => ({ entry, reason: 'reminder' as const }));
-    return [...due, ...reminders].slice(0, 4);
-  }, [entries]);
+    const seen = new Set<string>();
+    return [...due, ...reminders]
+      .filter(({ entry }) => {
+        if (seen.has(entry.id)) return false;
+        seen.add(entry.id);
+        return true;
+      })
+      .slice(0, 4);
+  }, [entries, now]);
 
   const onThisDay = useMemo(
-    () => entries.filter((e) => !e.archivedAt && isOnThisDay(e.createdAt)).slice(0, 2),
-    [entries],
+    () => entries.filter((entry) => !entry.archivedAt && isOnThisDay(entry.createdAt, new Date(now))).slice(0, 2),
+    [entries, now],
   );
 
   const revealed = useMemo(
@@ -185,7 +217,10 @@ export default function HomeScreen({ navigation }: Props) {
                   label="Share"
                   onPress={() => {
                     const msg = revealed.title ? `${revealed.title}\n\n${revealed.text}` : revealed.text;
-                    void Share.share({ message: msg }).catch(() => {});
+                    void Share.share({ message: msg }).catch(() => {
+                      haptics.warning();
+                      toast.show({ message: 'This entry could not be shared.', tone: 'warning' });
+                    });
                   }}
                   variant="plain"
                   size="md"
@@ -213,66 +248,76 @@ export default function HomeScreen({ navigation }: Props) {
           </View>
         )}
 
-        {(todayItems.length > 0 || !todayJournal) && (
-          <View style={styles.section}>
-            <Type role="label">Today</Type>
-            <Pressable
-              onPress={() =>
-                todayJournal
-                  ? navigation.navigate('EntryDetail', { entryId: todayJournal.id })
-                  : navigation.navigate('EntryEdit', { initialKind: 'journal' })
-              }
-              style={({ pressed }) => [styles.line, { opacity: pressed ? 0.55 : 1 }]}
-            >
-              <Type role="bodyStrong">{todayJournal ? "Today's journal" : 'Write today'}</Type>
-              <Type role="caption" color={palette.inkFaint} numberOfLines={1}>
-                {todayJournal ? todayJournal.text : 'A line or two about how today is going.'}
-              </Type>
-            </Pressable>
-            {todayItems.map(({ entry, reason }) => {
-              const overdue = reason === 'due' && !!entry.dueAt && daysUntil(entry.dueAt) < 0;
-              return (
-                <View key={entry.id}>
-                  <Rule />
-                  <View style={styles.lineRow}>
-                    {reason === 'due' ? (
-                      <Pressable
-                        onPress={() => {
-                          haptics.success();
-                          setStatus(entry.id, 'done');
-                        }}
-                        hitSlop={HIT_SLOP}
-                      >
-                        <Ionicons name="square-outline" size={20} color={palette.inkFaint} />
-                      </Pressable>
-                    ) : (
-                      <Ionicons name="notifications-outline" size={18} color={palette.inkSoft} />
-                    )}
+        <View style={styles.section}>
+          <Type role="label">Today</Type>
+          <Pressable
+            onPress={() =>
+              todayJournal
+                ? navigation.navigate('EntryDetail', { entryId: todayJournal.id })
+                : navigation.navigate('EntryEdit', { initialKind: 'journal' })
+            }
+            style={({ pressed }) => [styles.line, { opacity: pressed ? 0.55 : 1 }]}
+            accessibilityRole="button"
+            accessibilityLabel={todayJournal ? "Open today's journal" : "Write today's journal"}
+          >
+            <Type role="bodyStrong">{todayJournal ? "Today's journal" : 'Write today'}</Type>
+            <Type role="caption" color={palette.inkFaint} numberOfLines={1}>
+              {todayJournal ? todayJournal.text : 'A line or two about how today is going.'}
+            </Type>
+          </Pressable>
+          {todayItems.map(({ entry, reason }) => {
+            const overdue = reason === 'due' && !!entry.dueAt && daysUntil(entry.dueAt, new Date(now)) < 0;
+            const reminderDue = entry.remindAt !== undefined && entry.remindAt <= now;
+            return (
+              <View key={entry.id}>
+                <Rule />
+                <View style={styles.lineRow}>
+                  {reason === 'due' ? (
                     <Pressable
-                      onPress={() => navigation.navigate('EntryDetail', { entryId: entry.id })}
-                      style={styles.flex}
+                      onPress={() => {
+                        haptics.success();
+                        if (reminderDue) updateEntry(entry.id, { remindAt: null });
+                        setStatus(entry.id, 'done');
+                      }}
+                      hitSlop={HIT_SLOP}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: false }}
+                      accessibilityLabel="Mark task done"
                     >
-                      <Type role="bodyStrong" numberOfLines={1}>
-                        {entry.title ?? entry.text}
-                      </Type>
-                      <Type role="caption" color={overdue ? palette.danger : palette.inkFaint} numberOfLines={1}>
-                        {reason === 'due' && entry.dueAt ? formatDueLabel(entry.dueAt) : 'Reminder'}
-                      </Type>
+                      <Ionicons name="square-outline" size={20} color={palette.inkFaint} />
                     </Pressable>
-                    {reason === 'reminder' ? (
-                      <IconButton
-                        icon="close"
-                        label="Dismiss"
-                        size={16}
-                        onPress={() => updateEntry(entry.id, { remindAt: null })}
-                      />
-                    ) : null}
-                  </View>
+                  ) : (
+                    <Ionicons name="notifications-outline" size={18} color={palette.inkSoft} />
+                  )}
+                  <Pressable
+                    onPress={() => {
+                      if (reminderDue) updateEntry(entry.id, { remindAt: null });
+                      navigation.navigate('EntryDetail', { entryId: entry.id });
+                    }}
+                    style={styles.flex}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open ${entry.title ?? entry.text.slice(0, 60)}`}
+                  >
+                    <Type role="bodyStrong" numberOfLines={1}>
+                      {entry.title ?? entry.text}
+                    </Type>
+                    <Type role="caption" color={overdue ? palette.danger : palette.inkFaint} numberOfLines={1}>
+                      {reason === 'due' && entry.dueAt ? formatDueLabel(entry.dueAt) : 'Reminder'}
+                    </Type>
+                  </Pressable>
+                  {reason === 'reminder' ? (
+                    <IconButton
+                      icon="close"
+                      label="Dismiss reminder"
+                      size={16}
+                      onPress={() => updateEntry(entry.id, { remindAt: null })}
+                    />
+                  ) : null}
                 </View>
-              );
-            })}
-          </View>
-        )}
+              </View>
+            );
+          })}
+        </View>
 
         {onThisDay.length > 0 && !memoryDismissed ? (
           <View style={styles.section}>
@@ -281,13 +326,15 @@ export default function HomeScreen({ navigation }: Props) {
               <IconButton icon="close" label="Dismiss" size={16} onPress={() => setMemoryDismissed(true)} />
             </View>
             {onThisDay.map((entry, i) => {
-              const years = yearsAgo(entry.createdAt);
+              const years = yearsAgo(entry.createdAt, new Date(now));
               return (
                 <View key={entry.id}>
                   {i > 0 ? <Rule /> : null}
                   <Pressable
                     onPress={() => navigation.navigate('EntryDetail', { entryId: entry.id })}
                     style={({ pressed }) => [styles.line, { opacity: pressed ? 0.55 : 1 }]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open ${entry.title ?? entry.text.slice(0, 60)}`}
                   >
                     <Type role="bodyStrong" numberOfLines={1}>
                       {entry.title ?? entry.text}

@@ -24,10 +24,11 @@ Settings.
 
 ## Privacy
 
-- No account, no telemetry. Default network traffic is only model downloads (HuggingFace,
-  alphacephei), both user-initiated.
+- No account, no telemetry. With cloud AI and Android system dictation disabled, runtime network
+  traffic is limited to user-initiated AI and speech-model downloads.
 - Backup encryption: AES-256-CBC + HMAC-SHA256, PBKDF2 with 150,000 iterations.
-- Cloud AI and system dictation are off by default and reversible from Settings at any time.
+- Cloud AI sends the selected entry text to the endpoint shown in Settings. Android system
+  dictation may use the device vendor's speech service. Both are off by default and reversible.
 
 ## Install
 
@@ -38,15 +39,40 @@ Grab the latest APK from [Releases](https://github.com/Gr33nOps/trovelo/releases
 ## Development
 
 ```bash
-npm install
+npm ci
 npm run android        # build and run on a device/emulator
-npm run typecheck      # tsc --noEmit
+npm run lint
+npm run typecheck
+npm test
+npm run audit:deps
+npm run doctor
+npm run bundle:check
 ```
 
 Building an APK:
 
 - **Cloud (recommended):** `npm run build:android` — EAS build; it generates a keystore on first run
-- **Local:** `cd android && ./gradlew assembleRelease` → `android/app/build/outputs/apk/release/app-release.apk`
+- **Local debug:** `cd android && ./gradlew assembleDebug`
+- **Local release:** supply all four `TROVELO_UPLOAD_*` Gradle properties, then run
+  `./gradlew assembleRelease`. A release never falls back to the public debug key.
+
+The committed `android/` project is authoritative. It includes hand-written offline-speech
+modules and packaging rules that `expo prebuild` cannot safely recreate; do not delete or blindly
+regenerate it from `app.json`.
+
+## Releases
+
+The release workflow accepts a tag only when it exactly matches `package.json` (for example,
+`v1.13.1`). Before publishing, configure these protected GitHub Actions secrets:
+
+- `TROVELO_UPLOAD_KEYSTORE_BASE64`
+- `TROVELO_UPLOAD_STORE_PASSWORD`
+- `TROVELO_UPLOAD_KEY_ALIAS`
+- `TROVELO_UPLOAD_KEY_PASSWORD`
+
+The workflow verifies the APK signature, rejects the Android debug certificate, and publishes a
+SHA-256 checksum, CycloneDX dependency bill of materials, and GitHub build provenance. Keep the
+upload keystore and its passwords outside the repository and retain a secure recovery copy.
 
 ## Tech stack
 

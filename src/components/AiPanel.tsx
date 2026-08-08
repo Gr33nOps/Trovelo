@@ -51,13 +51,23 @@ export function AiPanel({
         </View>
         <Type role="caption">
           {availability === 'disabled'
-            ? 'Polish your writing, suggest a title, or add tags, all on this phone. Nothing is sent online.'
+            ? remote
+              ? 'Turn on the cloud assistant in Settings. Text you run through it will be sent to your configured provider.'
+              : 'Polish your writing, suggest a title, or add tags, all on this phone. Nothing is sent online.'
             : remote
               ? 'The assistant is on but no cloud provider is set up yet. Add one to get started.'
               : 'The assistant is on but has no model yet. Pick one to get started.'}
         </Type>
         <Button
-          label={availability === 'disabled' ? 'Set up the assistant' : remote ? 'Set up a provider' : 'Choose a model'}
+          label={
+            availability === 'disabled'
+              ? remote
+                ? 'Open assistant settings'
+                : 'Set up the assistant'
+              : remote
+                ? 'Set up a provider'
+                : 'Choose a model'
+          }
           variant="secondary"
           size="sm"
           onPress={onOpenSettings}

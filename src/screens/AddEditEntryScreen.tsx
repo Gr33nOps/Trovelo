@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -106,6 +107,16 @@ export default function AddEditEntryScreen({ navigation, route }: Props) {
       [haptics, navigation, toast, voiceProvider],
     ),
   });
+  const stopDictation = dictation.stop;
+
+  useFocusEffect(
+    useCallback(
+      () => () => {
+        stopDictation();
+      },
+      [stopDictation],
+    ),
+  );
 
   const dirty =
     title.trim() !== (existing?.title ?? '') ||
@@ -336,7 +347,11 @@ export default function AddEditEntryScreen({ navigation, route }: Props) {
               applyLabel={(taskId) =>
                 taskId === 'polish' ? 'Replace my text' : taskId === 'title' ? 'Use this title' : 'Add these tags'
               }
-              onOpenSettings={() => navigation.navigate('Models')}
+              onOpenSettings={() =>
+                ai.engine === 'remote'
+                  ? navigation.navigate('MainTabs', { screen: 'Settings' })
+                  : navigation.navigate('Models')
+              }
             />
           </View>
 

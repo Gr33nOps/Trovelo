@@ -12,7 +12,6 @@ import { Chip } from '../ui/Controls';
 import { Field } from '../ui/Field';
 import { Panel, Well } from '../ui/Surface';
 import { Type } from '../ui/Type';
-import { scoreEntry } from '../utils/search';
 
 interface Props {
   entries: Entry[];
@@ -22,8 +21,60 @@ interface Props {
 
 const MAX_SOURCES = 6;
 
+const QUESTION_WORDS = new Set([
+  'a',
+  'about',
+  'an',
+  'and',
+  'are',
+  'do',
+  'does',
+  'for',
+  'from',
+  'have',
+  'i',
+  'in',
+  'is',
+  'me',
+  'my',
+  'of',
+  'on',
+  'or',
+  'relate',
+  'related',
+  'show',
+  'that',
+  'the',
+  'to',
+  'what',
+  'which',
+  'with',
+]);
+
 function words(text: string): string[] {
-  return text.toLowerCase().match(/[a-z0-9']+/g) ?? [];
+  return (text.normalize('NFKC').toLowerCase().match(/[\p{L}\p{M}\p{N}']+/gu) ?? []).filter(
+    (word) => word.length > 1 && !QUESTION_WORDS.has(word),
+  );
+}
+
+function sourceScore(entry: Entry, queryWords: readonly string[]): number {
+  const title = (entry.title ?? '').normalize('NFKC').toLowerCase();
+  const body = entry.text.normalize('NFKC').toLowerCase();
+  const tags = entry.tags.map((tag) => tag.normalize('NFKC').toLowerCase());
+  let score = 0;
+  let matches = 0;
+
+  for (const word of queryWords) {
+    const variants = word.endsWith('s') && word.length > 3 ? [word, word.slice(0, -1)] : [word];
+    const inTitle = variants.some((candidate) => title.includes(candidate));
+    const inTag = variants.some((candidate) => tags.some((tag) => tag.includes(candidate)));
+    const inBody = variants.some((candidate) => body.includes(candidate));
+    if (!inTitle && !inTag && !inBody) continue;
+    matches += 1;
+    score += inTitle ? 6 : inTag ? 5 : 2;
+  }
+
+  return matches === 0 ? 0 : score + (matches / queryWords.length) * 4;
 }
 
 /**
@@ -44,9 +95,14 @@ export function AskBoxPanel({ entries, onOpenEntry, onOpenSettings }: Props) {
     setNoMatch(false);
 
     const queryWords = words(trimmed);
+    if (queryWords.length === 0) {
+      setNoMatch(true);
+      runner.reset();
+      return;
+    }
     const scored = entries
       .filter((entry) => !entry.archivedAt)
-      .map((entry) => ({ entry, score: scoreEntry(entry, queryWords) }))
+      .map((entry) => ({ entry, score: sourceScore(entry, queryWords) }))
       .filter((item) => item.score > 0)
       .sort((a, b) => b.score - a.score)
       .slice(0, MAX_SOURCES);
@@ -105,6 +161,7 @@ export function AskBoxPanel({ entries, onOpenEntry, onOpenSettings }: Props) {
           setNoMatch(false);
         }}
         placeholder="What tasks relate to my project?"
+        maxLength={500}
         returnKeyType="search"
         onSubmitEditing={ask}
         editable={!runner.running}
