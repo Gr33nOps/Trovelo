@@ -38,7 +38,7 @@ export default function ReviewScreen({ navigation }: Props) {
 
   const [queueIds] = useState<string[]>(() =>
     entries
-      .filter((entry) => entry.kind !== 'task' && !entry.archivedAt && entry.status !== 'not_useful')
+      .filter((entry) => !entry.archivedAt && entry.status !== 'not_useful')
       .sort((a, b) => (a.lastViewedAt ?? a.createdAt) - (b.lastViewedAt ?? b.createdAt))
       .slice(0, REVIEW_SIZE)
       .map((entry) => entry.id),

@@ -27,8 +27,8 @@ const DAY = 86_400_000;
 function weightFor(entry: Entry, now: number): number {
   // Explicitly dismissed ideas stay in the library but stop coming up.
   if (entry.status === 'not_useful') return 0;
-  // Tasks are for doing, not rediscovering, and archived entries are put away.
-  if (entry.kind === 'task' || entry.archivedAt) return 0;
+  // Archived entries are put away.
+  if (entry.archivedAt) return 0;
 
   const lastSeen = entry.lastViewedAt ?? entry.createdAt;
   const daysSinceSeen = Math.max(0, (now - lastSeen) / DAY);
@@ -66,7 +66,7 @@ export function pickSurprise(entries: readonly Entry[], recentIds: readonly stri
 
   // Widen the net only as far as needed: unseen-recently first, then all
   // eligible entries. Explicitly dismissed entries never resurface.
-  const eligible = entries.filter((entry) => entry.kind !== 'task' && !entry.archivedAt);
+  const eligible = entries.filter((entry) => !entry.archivedAt);
   let candidates = build(eligible.filter((entry) => !recent.has(entry.id)));
   if (candidates.length === 0) candidates = build(eligible);
   if (candidates.length === 0) return null;

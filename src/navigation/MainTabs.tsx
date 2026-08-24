@@ -11,10 +11,9 @@ import LibraryScreen from '../screens/LibraryScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import StatsScreen from '../screens/StatsScreen';
 import { Type } from '../ui/Type';
-import { EntryKind } from '../types';
 
 export type MainTabParamList = {
-  Library: { tag?: string; kind?: EntryKind } | undefined;
+  Library: { tag?: string } | undefined;
   Home: undefined;
   New: undefined;
   Stats: undefined;

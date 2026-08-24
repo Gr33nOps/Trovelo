@@ -1,7 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, ScrollView, StyleSheet, View } from 'react-native';
 
-import { KIND_CONFIG } from '../constants/kinds';
 import { fonts, fontSizes, spacing, weights } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { Entry } from '../types';
@@ -16,11 +15,10 @@ interface Props {
   onTagPress?: (tag: string) => void;
 }
 
-/** Calm surprise reading surface — kind, body, date. Nothing else. */
+/** Calm surprise reading surface — body and date. Nothing else. */
 export function SurpriseCard({ entry, folderName, onToggleFavorite }: Props) {
   const { palette } = useTheme();
   const reveal = useRef(new Animated.Value(0)).current;
-  const kind = entry.kind ?? 'idea';
   const body = entry.title?.trim() ? `${entry.title.trim()}\n\n${entry.text}` : entry.text;
 
   useEffect(() => {
@@ -42,9 +40,6 @@ export function SurpriseCard({ entry, folderName, onToggleFavorite }: Props) {
     >
       <View style={styles.wrap}>
         <View style={styles.top}>
-          <Type role="label" color={palette.inkFaint}>
-            {KIND_CONFIG[kind].label}
-          </Type>
           <IconButton
             icon={entry.isFavorite ? 'star' : 'star-outline'}
             label={entry.isFavorite ? 'Remove from favourites' : 'Add to favourites'}
@@ -77,7 +72,7 @@ const styles = StyleSheet.create({
   top: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
   },
   scroll: {
     maxHeight: 360,

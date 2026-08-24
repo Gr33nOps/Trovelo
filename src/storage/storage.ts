@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { Category, Entry, FollowUp, Preferences, isAccentId, isEntryKind, isEntryStatus } from '../types';
+import { Category, Entry, FollowUp, Preferences, isAccentId, isEntryStatus } from '../types';
 import { DEFAULT_ACCENT_ID } from '../constants/theme';
 import { MAX_TAGS_PER_ENTRY, normalizeTag } from '../utils/tags';
 
@@ -8,18 +8,8 @@ const ENTRIES_KEY = '@trovelo/entries/v1';
 const PREFS_KEY = '@trovelo/prefs/v1';
 const CATEGORIES_KEY = '@trovelo/categories/v1';
 
-/** Single record holding assistant/haptics/voice preferences. */
+/** Single record holding app preferences (currently just haptics). */
 export const SETTINGS_KEY = '@trovelo/settings/v2';
-
-/** Pre-settings-record keys (also renamed for the Trovelo rebrand). */
-export const LEGACY_AI_KEYS = {
-  aiEnabled: '@trovelo/aiEnabled/v1',
-  modelPath: '@trovelo/aiModelPath/v1',
-  modelId: '@trovelo/aiModel/v1',
-} as const;
-
-/** Resume token for an interrupted model download. */
-export const MODEL_DOWNLOAD_KEY = '@trovelo/modelDownload/v1';
 
 /**
  * Keys written by the pre-Trovelo builds. Values are moved to the `@trovelo/*`
@@ -31,10 +21,6 @@ const LEGACY = {
   prefs: '@serendipity/prefs/v1',
   categories: '@serendipity/categories/v1',
   settings: '@serendipity/settings/v2',
-  aiEnabled: '@serendipity/aiEnabled/v1',
-  modelPath: '@serendipity/aiModelPath/v1',
-  modelId: '@serendipity/aiModel/v1',
-  modelDownload: '@serendipity/modelDownload/v1',
 } as const;
 
 const MIGRATION_PAIRS: readonly (readonly [string, string])[] = [
@@ -42,10 +28,6 @@ const MIGRATION_PAIRS: readonly (readonly [string, string])[] = [
   [PREFS_KEY, LEGACY.prefs],
   [CATEGORIES_KEY, LEGACY.categories],
   [SETTINGS_KEY, LEGACY.settings],
-  [LEGACY_AI_KEYS.aiEnabled, LEGACY.aiEnabled],
-  [LEGACY_AI_KEYS.modelPath, LEGACY.modelPath],
-  [LEGACY_AI_KEYS.modelId, LEGACY.modelId],
-  [MODEL_DOWNLOAD_KEY, LEGACY.modelDownload],
 ];
 
 const LEGACY_STORAGE_KEYS = Object.values(LEGACY);
@@ -56,8 +38,6 @@ export const STORAGE_KEYS = [
   PREFS_KEY,
   CATEGORIES_KEY,
   SETTINGS_KEY,
-  ...Object.values(LEGACY_AI_KEYS),
-  MODEL_DOWNLOAD_KEY,
   ...LEGACY_STORAGE_KEYS,
 ] as const;
 
@@ -260,8 +240,6 @@ export function normalizeEntry(raw: unknown): Entry | null {
       typeof record.lastViewedAt === 'number' && Number.isFinite(record.lastViewedAt)
         ? record.lastViewedAt
         : undefined,
-    kind: isEntryKind(record.kind) && record.kind !== 'idea' ? record.kind : undefined,
-    dueAt: typeof record.dueAt === 'number' && Number.isFinite(record.dueAt) ? record.dueAt : undefined,
     remindAt:
       typeof record.remindAt === 'number' && Number.isFinite(record.remindAt) ? record.remindAt : undefined,
     archivedAt:
@@ -360,29 +338,6 @@ export function saveSettingsRecord(settings: unknown): Promise<void> {
   return writeJson(SETTINGS_KEY, settings);
 }
 
-export interface LegacySettingsFields {
-  aiEnabled: string | null;
-  modelPath: string | null;
-  modelId: string | null;
-}
-
-/** Reads both transitional namespaces so a failed batch rename cannot lose settings. */
-export async function loadLegacySettingsFields(): Promise<LegacySettingsFields> {
-  const currentKeys = Object.values(LEGACY_AI_KEYS);
-  const renamedKeys = [LEGACY.aiEnabled, LEGACY.modelPath, LEGACY.modelId];
-  const [currentValues, renamedValues] = await Promise.all([
-    AsyncStorage.multiGet(currentKeys),
-    AsyncStorage.multiGet(renamedKeys),
-  ]);
-  const current = new Map(currentValues);
-  const renamed = new Map(renamedValues);
-  return {
-    aiEnabled: current.get(LEGACY_AI_KEYS.aiEnabled) ?? renamed.get(LEGACY.aiEnabled) ?? null,
-    modelPath: current.get(LEGACY_AI_KEYS.modelPath) ?? renamed.get(LEGACY.modelPath) ?? null,
-    modelId: current.get(LEGACY_AI_KEYS.modelId) ?? renamed.get(LEGACY.modelId) ?? null,
-  };
-}
-
 async function removeStoredKeys(keys: readonly string[]): Promise<void> {
   for (const key of keys) pending.delete(key);
   await Promise.allSettled(
@@ -393,24 +348,8 @@ async function removeStoredKeys(keys: readonly string[]): Promise<void> {
   await AsyncStorage.multiRemove([...keys]);
 }
 
-export function clearLegacySettingsFields(): Promise<void> {
-  return removeStoredKeys([
-    ...Object.values(LEGACY_AI_KEYS),
-    LEGACY.aiEnabled,
-    LEGACY.modelPath,
-    LEGACY.modelId,
-  ]);
-}
-
 export function clearStoredSettings(): Promise<void> {
-  return removeStoredKeys([
-    SETTINGS_KEY,
-    ...Object.values(LEGACY_AI_KEYS),
-    LEGACY.settings,
-    LEGACY.aiEnabled,
-    LEGACY.modelPath,
-    LEGACY.modelId,
-  ]);
+  return removeStoredKeys([SETTINGS_KEY, LEGACY.settings]);
 }
 
 export function clearStoredPreferences(): Promise<void> {

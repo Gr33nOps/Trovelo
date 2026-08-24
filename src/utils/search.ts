@@ -115,8 +115,7 @@ export function searchEntries<T extends Searchable>(entries: readonly T[], query
 
 /**
  * Finds entries that share tags or distinctive words with `target`. Pure
- * word overlap, no model required, so it works the same with or without an
- * assistant installed.
+ * word overlap, no model required.
  */
 export function findRelated(entries: readonly Entry[], target: Entry, limit = 4): Entry[] {
   const targetTags = new Set(target.tags);

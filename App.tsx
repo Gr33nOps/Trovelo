@@ -13,13 +13,11 @@ import * as SystemUI from 'expo-system-ui';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ErrorBoundary } from './src/components/ErrorBoundary';
-import { DownloadProvider } from './src/context/DownloadContext';
 import { EntriesProvider, useEntries } from './src/context/EntriesContext';
 import { SettingsProvider, useSettings } from './src/context/SettingsContext';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { ToastProvider } from './src/context/ToastContext';
 import { RootNavigator } from './src/navigation';
-import { installAiLifecycleHooks } from './src/services/ai';
 import { cleanBackupCache } from './src/services/backup';
 import { migrateLegacyKeys } from './src/storage/storage';
 
@@ -49,10 +47,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const removeAiHooks = installAiLifecycleHooks();
     // Sweep any backup file left in the cache by a previous session.
     void cleanBackupCache().catch(() => {});
-    return removeAiHooks;
   }, []);
 
   if (!keysMigrated || (!fontsLoaded && !fontError)) {
@@ -65,13 +61,11 @@ export default function App() {
       <SafeAreaProvider>
         <SettingsProvider>
           <ThemeProvider>
-            <DownloadProvider>
-              <EntriesProvider>
-                <ToastProvider>
-                  <AppShell />
-                </ToastProvider>
-              </EntriesProvider>
-            </DownloadProvider>
+            <EntriesProvider>
+              <ToastProvider>
+                <AppShell />
+              </ToastProvider>
+            </EntriesProvider>
           </ThemeProvider>
         </SettingsProvider>
       </SafeAreaProvider>

@@ -8,11 +8,9 @@ import { useTheme } from '../context/ThemeContext';
 import AddEditEntryScreen from '../screens/AddEditEntryScreen';
 import BackupScreen from '../screens/BackupScreen';
 import EntryDetailScreen from '../screens/EntryDetailScreen';
-import ModelsScreen from '../screens/ModelsScreen';
 import OnboardingScreen from '../screens/OnboardingScreen';
 import ReviewScreen from '../screens/ReviewScreen';
 import TidyScreen from '../screens/TidyScreen';
-import { EntryKind } from '../types';
 import { MainTabParamList, MainTabs } from './MainTabs';
 
 export type { MainTabParamList };
@@ -21,8 +19,7 @@ export type RootStackParamList = {
   Onboarding: undefined;
   MainTabs: NavigatorScreenParams<MainTabParamList> | undefined;
   EntryDetail: { entryId: string };
-  EntryEdit: { entryId?: string; initialText?: string; initialKind?: EntryKind } | undefined;
-  Models: undefined;
+  EntryEdit: { entryId?: string; initialText?: string } | undefined;
   Backup: undefined;
   Review: undefined;
   Tidy: undefined;
@@ -68,7 +65,6 @@ export function RootNavigator() {
         component={AddEditEntryScreen}
         options={{ animation: 'slide_from_bottom' }}
       />
-      <Stack.Screen name="Models" component={ModelsScreen} />
       <Stack.Screen name="Backup" component={BackupScreen} />
       <Stack.Screen name="Review" component={ReviewScreen} />
       <Stack.Screen name="Tidy" component={TidyScreen} />

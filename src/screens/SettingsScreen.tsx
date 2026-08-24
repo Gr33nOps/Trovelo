@@ -1,43 +1,23 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useFocusEffect } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 
-import { RemoteAiSettings } from '../components/RemoteAiSettings';
-import { ACCENT_COLORS, PAGE_PAD, contrastingInk, radius as radii, spacing } from '../constants/theme';
+import { ACCENT_COLORS, PAGE_PAD, contrastingInk, spacing } from '../constants/theme';
 import { useEntries } from '../context/EntriesContext';
 import { useSettings } from '../context/SettingsContext';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useHaptics } from '../hooks/useHaptics';
 import { MainTabScreenProps } from '../navigation';
-import { androidSpeechModuleAvailable, isAndroidSpeechAvailable } from '../services/androidSpeech';
-import { unloadModel } from '../services/ai';
-import { cleanBackupCache } from '../services/backup';
-import {
-  clearAllRemoteApiKeys,
-  clearRemoteApiKey,
-  getRemoteApiKey,
-  setRemoteApiKey,
-} from '../services/aiProvider';
-import {
-  SPEECH_MODEL_SIZE_LABEL,
-  SpeechDownloadHandle,
-  downloadSpeechModel,
-  isSpeechModelReady,
-  removeSpeechModel,
-  speechAvailable,
-} from '../services/speech';
-import { removeAllModelFiles } from '../services/modelStore';
 import { clearAllStoredData } from '../storage/storage';
-import { AiEngineKind, RemoteAiConfig, ThemeMode, VoiceProvider } from '../types';
+import { ThemeMode } from '../types';
 import { Button } from '../ui/Button';
-import { ProgressBar, Segmented } from '../ui/Controls';
+import { Segmented } from '../ui/Controls';
 import { Field } from '../ui/Field';
 import { Group, Row, SectionHeader } from '../ui/Group';
 import { NavBar } from '../ui/NavBar';
-import { Backdrop, Panel } from '../ui/Surface';
+import { Backdrop } from '../ui/Surface';
 import { Type } from '../ui/Type';
 
 type Props = MainTabScreenProps<'Settings'>;
@@ -46,16 +26,6 @@ const THEME_OPTIONS = [
   { value: 'system' as ThemeMode, label: 'Automatic', icon: 'phone-portrait-outline' as const },
   { value: 'light' as ThemeMode, label: 'Day', icon: 'sunny-outline' as const },
   { value: 'dark' as ThemeMode, label: 'Night', icon: 'moon-outline' as const },
-];
-
-const VOICE_OPTIONS = [
-  { value: 'vosk' as VoiceProvider, label: 'Offline pack', icon: 'cloud-offline-outline' as const },
-  { value: 'android' as VoiceProvider, label: "Phone's recognizer", icon: 'wifi-outline' as const },
-];
-
-const ENGINE_OPTIONS = [
-  { value: 'local' as AiEngineKind, label: 'On this phone', icon: 'phone-portrait-outline' as const },
-  { value: 'remote' as AiEngineKind, label: 'Cloud', icon: 'cloud-outline' as const },
 ];
 
 export default function SettingsScreen({ navigation }: Props) {
@@ -69,176 +39,7 @@ export default function SettingsScreen({ navigation }: Props) {
   const [newFolder, setNewFolder] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
-
-  const [speechReady, setSpeechReady] = useState<boolean | null>(null);
-  const [speechProgress, setSpeechProgress] = useState<number | null>(null);
-  const [removingSpeech, setRemovingSpeech] = useState(false);
-  const [androidSpeechReady, setAndroidSpeechReady] = useState<boolean | null>(null);
-  const [hasRemoteKey, setHasRemoteKey] = useState(false);
   const [erasing, setErasing] = useState(false);
-  const speechDownload = useRef<SpeechDownloadHandle | null>(null);
-  const remoteKeyCheck = useRef(0);
-
-  const untaggedCount = entries.filter((entry) => entry.tags.length === 0 && !entry.archivedAt).length;
-
-  const refreshRemoteKey = useCallback(() => {
-    const check = ++remoteKeyCheck.current;
-    if (!settings.remoteAiConfig) {
-      setHasRemoteKey(false);
-      return () => {
-        if (remoteKeyCheck.current === check) remoteKeyCheck.current += 1;
-      };
-    }
-    void getRemoteApiKey(settings.remoteAiConfig).then((key) => {
-      if (remoteKeyCheck.current === check) setHasRemoteKey(!!key);
-    });
-    return () => {
-      if (remoteKeyCheck.current === check) remoteKeyCheck.current += 1;
-    };
-  }, [settings.remoteAiConfig]);
-
-  useFocusEffect(refreshRemoteKey);
-
-  const handleEngineChange = (value: AiEngineKind) => {
-    if (value === 'local') {
-      settings.set('aiEngine', 'local');
-      return;
-    }
-    Alert.alert(
-      'Use a cloud assistant?',
-      "Notes you run through the assistant will be sent to whichever provider you set up below, along with your API key. Nothing else on this phone is affected, and switching back is instant.",
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Continue', onPress: () => settings.set('aiEngine', 'remote') },
-      ],
-    );
-  };
-
-  const handleSaveRemote = async (config: RemoteAiConfig, key: string): Promise<boolean> => {
-    let configSaved = false;
-    try {
-      // Persist the visible destination first. If the keystore then fails,
-      // the form remains on that destination for a retry; no secret can be
-      // orphaned under an invisible scope.
-      await settings.setRemoteAiConfig(config);
-      configSaved = true;
-      if (key) {
-        await setRemoteApiKey(config, key);
-      }
-      if (key) setHasRemoteKey(true);
-      haptics.success();
-      toast.show({ message: 'Cloud provider saved.', tone: 'success' });
-      return true;
-    } catch (caught) {
-      haptics.warning();
-      toast.show({
-        message:
-          configSaved && key
-            ? 'The provider was saved, but its API key could not be stored. Enter the key and try again.'
-            : caught instanceof Error
-              ? caught.message
-              : 'The cloud provider could not be saved.',
-        tone: 'warning',
-      });
-      return false;
-    }
-  };
-
-  const handleClearRemoteKey = async (): Promise<boolean> => {
-    if (!settings.remoteAiConfig) return false;
-    try {
-      await clearRemoteApiKey(settings.remoteAiConfig);
-      setHasRemoteKey(false);
-      haptics.warning();
-      toast.show({ message: 'API key removed.' });
-      return true;
-    } catch (caught) {
-      haptics.warning();
-      toast.show({
-        message: caught instanceof Error ? caught.message : 'The API key could not be removed.',
-        tone: 'warning',
-      });
-      return false;
-    }
-  };
-
-  const refreshSpeech = useCallback(() => {
-    setSpeechReady(null);
-    void isSpeechModelReady().then(setSpeechReady);
-  }, []);
-
-  useFocusEffect(refreshSpeech);
-
-  const refreshAndroidSpeech = useCallback(() => {
-    setAndroidSpeechReady(null);
-    void isAndroidSpeechAvailable().then(setAndroidSpeechReady);
-  }, []);
-
-  useFocusEffect(refreshAndroidSpeech);
-
-  const handleDownloadSpeech = () => {
-    if (speechDownload.current) return;
-    setSpeechProgress(0);
-    speechDownload.current = downloadSpeechModel(
-      setSpeechProgress,
-      () => {
-        speechDownload.current = null;
-        haptics.success();
-        setSpeechProgress(null);
-        refreshSpeech();
-        toast.show({ message: 'Speech pack installed. You can dictate now.', tone: 'success' });
-      },
-      (message) => {
-        speechDownload.current = null;
-        haptics.warning();
-        setSpeechProgress(null);
-        toast.show({ message, tone: 'warning' });
-      },
-    );
-  };
-
-  const cancelSpeechDownload = useCallback(() => {
-    speechDownload.current?.cancel();
-    speechDownload.current = null;
-    setSpeechProgress(null);
-    toast.show({ message: 'Speech pack download cancelled.' });
-  }, [toast]);
-
-  useEffect(
-    () => () => {
-      speechDownload.current?.cancel();
-      speechDownload.current = null;
-    },
-    [],
-  );
-
-  const confirmRemoveSpeech = () => {
-    if (removingSpeech) return;
-    Alert.alert('Remove the speech pack?', 'Dictation will stop working until you download it again.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: async () => {
-          setRemovingSpeech(true);
-          try {
-            await removeSpeechModel();
-            haptics.warning();
-            refreshSpeech();
-            toast.show({ message: 'Speech pack removed.' });
-          } catch (caught) {
-            haptics.warning();
-            toast.show({
-              message: caught instanceof Error ? caught.message : 'The speech pack could not be removed.',
-              tone: 'warning',
-            });
-          } finally {
-            setRemovingSpeech(false);
-          }
-        },
-      },
-    ]);
-  };
 
   const handleAddFolder = () => {
     try {
@@ -296,7 +97,7 @@ export default function SettingsScreen({ navigation }: Props) {
     if (erasing) return;
     Alert.alert(
       'Delete everything?',
-      `All ${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}, folders, settings, API keys, downloaded assistant and speech files, and cached exports will be permanently removed from this phone. This cannot be undone. Make a backup first if you might want your entries back.`,
+      `All ${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}, folders, settings and cached exports will be permanently removed from this phone. This cannot be undone. Make a backup first if you might want your entries back.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -309,22 +110,9 @@ export default function SettingsScreen({ navigation }: Props) {
           onPress: async () => {
             setErasing(true);
             try {
-              speechDownload.current?.cancel();
-              speechDownload.current = null;
-              setSpeechProgress(null);
-              // Unloading intentionally stops any active local generation;
-              // no model context or task may outlive a full-device erase.
-              await unloadModel();
-              await removeAllModelFiles();
-              await removeSpeechModel();
-              // SecureStore is separate from AsyncStorage, and provider keys
-              // are endpoint-scoped, so every registered slot must be cleared.
-              await clearAllRemoteApiKeys();
-              await cleanBackupCache();
               await clearAllStoredData();
               await Promise.all([settings.resetSettings(), resetPreferences()]);
               clearAll();
-              setHasRemoteKey(false);
               haptics.warning();
               toast.show({ message: 'Everything has been deleted.', tone: 'warning' });
               navigation.getParent()?.reset({ index: 0, routes: [{ name: 'Onboarding' }] });
@@ -412,171 +200,6 @@ export default function SettingsScreen({ navigation }: Props) {
 
         <View>
           <SectionHeader
-            title="Intelligence"
-            hint={
-              settings.aiEngine === 'remote'
-                ? 'Set to a cloud provider below. Notes run through it leave this phone.'
-                : 'Runs on this phone. Nothing you write is ever uploaded.'
-            }
-          />
-          <Group>
-            <Row
-              title="Assistant"
-              subtitle={
-                settings.aiEngine === 'remote'
-                  ? 'Groq, OpenRouter, Gemini, or an HTTPS OpenAI-compatible endpoint'
-                  : 'Private, offline suggestions from a model on this phone'
-              }
-              right={
-                <Switch
-                  value={settings.aiEnabled}
-                  onValueChange={(value) => {
-                    haptics.light();
-                    settings.setAiEnabled(value);
-                  }}
-                  trackColor={{ false: palette.switchOff, true: palette.accent }}
-                  thumbColor="#FFFFFF"
-                  accessibilityLabel="Use the assistant"
-                />
-              }
-            />
-          </Group>
-
-          <View style={styles.engineSegmented}>
-            <Segmented
-              options={ENGINE_OPTIONS}
-              value={settings.aiEngine}
-              onChange={handleEngineChange}
-              accessibilityLabel="Assistant engine"
-            />
-          </View>
-
-          {settings.aiEngine === 'local' ? (
-            <Group>
-              <Row
-                title="Model"
-                subtitle={
-                  settings.selectedModelPath
-                    ? decodeURIComponent(settings.selectedModelPath.split('/').pop() ?? '')
-                    : 'None chosen yet'
-                }
-                onPress={() => navigation.navigate('Models')}
-                accessibilityHint="Choose, download or remove an assistant model"
-              />
-            </Group>
-          ) : (
-            <Panel borderRadius={radii.lg}>
-              <RemoteAiSettings
-                key={`${settings.remoteAiConfig?.preset ?? 'none'}:${settings.remoteAiConfig?.baseUrl ?? ''}:${settings.remoteAiConfig?.model ?? ''}`}
-                config={settings.remoteAiConfig}
-                hasStoredKey={hasRemoteKey}
-                onSave={handleSaveRemote}
-                onClearKey={handleClearRemoteKey}
-              />
-            </Panel>
-          )}
-        </View>
-
-        {speechAvailable || androidSpeechModuleAvailable ? (
-          <View>
-            <SectionHeader
-              title="Voice input"
-              hint="Dictate instead of typing. The offline pack never leaves this phone; the phone's own recognizer is more accurate but is not offline."
-            />
-            <Group>
-              <Row
-                title="System voice recognition"
-                subtitle="Uses your device's built-in service"
-                right={
-                  <Switch
-                    value={settings.voiceProvider === 'android'}
-                    onValueChange={(value) => settings.set('voiceProvider', value ? 'android' : 'vosk')}
-                    trackColor={{ false: palette.switchOff, true: palette.accent }}
-                    thumbColor="#FFFFFF"
-                    accessibilityLabel="System voice recognition"
-                  />
-                }
-              />
-            </Group>
-            <Segmented
-              options={VOICE_OPTIONS}
-              value={settings.voiceProvider}
-              onChange={(value) => settings.set('voiceProvider', value)}
-              accessibilityLabel="Voice input engine"
-              style={styles.voiceSegmented}
-            />
-            {settings.voiceProvider === 'vosk' ? (
-              <>
-                <Group>
-                  {speechProgress !== null ? (
-                    <Row
-                      title="Downloading speech pack"
-                      right={<Button label="Cancel" size="sm" variant="secondary" onPress={cancelSpeechDownload} />}
-                      subtitle={`${Math.round(speechProgress * 100)}% done`}
-                      chevron={false}
-                    />
-                  ) : speechReady === null ? (
-                    <Row
-                      title="Checking speech pack"
-                      subtitle="Looking for an existing offline pack on this phone."
-                      chevron={false}
-                    />
-                  ) : (
-                    <Row
-                      title={speechReady ? 'Speech pack installed' : 'Download speech pack'}
-                      subtitle={
-                        speechReady
-                          ? 'Dictation is ready to use. Fully offline.'
-                          : `About ${SPEECH_MODEL_SIZE_LABEL}, downloaded once. Fully offline.`
-                      }
-                      right={
-                        speechReady ? (
-                          <Button
-                            label="Remove"
-                            size="sm"
-                            variant="secondary"
-                            loading={removingSpeech}
-                            onPress={confirmRemoveSpeech}
-                          />
-                        ) : (
-                          <Button label="Download" size="sm" variant="primary" onPress={handleDownloadSpeech} />
-                        )
-                      }
-                    />
-                  )}
-                </Group>
-                {speechProgress !== null ? (
-                  <View style={styles.progress}>
-                    <ProgressBar fraction={speechProgress} />
-                  </View>
-                ) : null}
-              </>
-            ) : (
-              <Group>
-                <Row
-                  title={
-                    androidSpeechReady === null
-                      ? 'Checking phone recognizer'
-                      : androidSpeechReady
-                        ? "Phone's recognizer ready"
-                        : 'No recognizer found'
-                  }
-                  subtitle={
-                    androidSpeechReady === null
-                      ? 'Looking for an installed speech recognition service.'
-                      : androidSpeechReady
-                      ? 'Uses whatever speech service is installed, usually the Google app. Audio leaves this phone to be transcribed.'
-                      : "This phone doesn't have a speech recognition service installed. Switch back to the offline pack."
-                  }
-                  chevron={false}
-                />
-              </Group>
-            )}
-          </View>
-        ) : null}
-
-        <View>
-          <SectionHeader
             title="Folders"
             hint="Optional grouping. Deleting a folder never deletes the entries inside it."
           />
@@ -590,12 +213,7 @@ export default function SettingsScreen({ navigation }: Props) {
             ) : (
               categories.map((category) => {
                 const count = entries.filter((entry) => entry.categoryId === category.id).length;
-                const openTasks = entries.filter(
-                  (entry) => entry.categoryId === category.id && entry.kind === 'task' && entry.status !== 'done',
-                ).length;
-                const subtitle = `${count} ${count === 1 ? 'entry' : 'entries'}${
-                  openTasks > 0 ? `, ${openTasks} open ${openTasks === 1 ? 'task' : 'tasks'}` : ''
-                }`;
+                const subtitle = `${count} ${count === 1 ? 'entry' : 'entries'}`;
                 const editing = editingId === category.id;
                 return editing ? (
                   <View key={category.id} style={styles.folderEdit}>
@@ -681,11 +299,7 @@ export default function SettingsScreen({ navigation }: Props) {
             />
             <Row
               title="Tidy up"
-              subtitle={
-                untaggedCount > 0
-                  ? `Suggest tags for ${untaggedCount} untagged ${untaggedCount === 1 ? 'entry' : 'entries'}.`
-                  : 'Everything already has at least one tag.'
-              }
+              subtitle="Add tags to entries that do not have any yet."
               onPress={() => navigation.navigate('Tidy')}
             />
           </Group>
@@ -717,9 +331,8 @@ export default function SettingsScreen({ navigation }: Props) {
 
         <View style={styles.about}>
           <Type role="caption" style={styles.aboutText}>
-            Trovelo has no account, telemetry, or server. Network access happens only when you start a model or
-            speech-pack download, use your phone&apos;s speech recognizer, or run a note through a cloud assistant you
-            configured. Local assistant and offline speech modes keep their content on this device.
+            Trovelo has no account, telemetry, or server, and makes no network requests. Everything you write
+            stays on this phone.
           </Type>
         </View>
       </ScrollView>
@@ -749,17 +362,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-  },
-  progress: {
-    paddingTop: spacing.md,
-    paddingHorizontal: spacing.xs,
-  },
-  voiceSegmented: {
-    marginBottom: spacing.md,
-  },
-  engineSegmented: {
-    marginTop: spacing.md,
-    marginBottom: spacing.md,
   },
   folderEdit: {
     flexDirection: 'row',

@@ -1,130 +1,52 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Alert,
-  Keyboard,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  View,
-} from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Alert, Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
-import { AiPanel } from '../components/AiPanel';
-import { DatePicker } from '../components/DatePicker';
-import { StatusPicker } from '../components/StatusPicker';
 import { TagInput } from '../components/TagInput';
-import { KIND_CONFIG, KIND_ORDER } from '../constants/kinds';
-import { radius as radii, PAGE_PAD, spacing, withAlpha } from '../constants/theme';
+import { PAGE_PAD, spacing } from '../constants/theme';
 import { useEntries } from '../context/EntriesContext';
-import { useSettings } from '../context/SettingsContext';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
-import { useAiRunner } from '../hooks/useAiRunner';
-import { DictationDenial, useDictation } from '../hooks/useDictation';
 import { useHaptics } from '../hooks/useHaptics';
 import { RootStackParamList } from '../navigation';
-import { AiTaskId } from '../services/ai';
-import { SPEECH_MODEL_SIZE_LABEL } from '../services/speech';
-import { EntryKind, EntryStatus } from '../types';
 import { Button } from '../ui/Button';
-import { Chip, TextTab } from '../ui/Controls';
+import { Chip } from '../ui/Controls';
 import { Field } from '../ui/Field';
 import { NavBar, NavTextAction } from '../ui/NavBar';
 import { Backdrop } from '../ui/Surface';
 import { Type } from '../ui/Type';
-import { addTag, matchKnownTags, parseTags } from '../utils/tags';
+import { fixGrammarAndStyle } from '../utils/grammar';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'EntryEdit'>;
 
 const MAX_TEXT_LENGTH = 4000;
 const MAX_TITLE_LENGTH = 90;
-const EDIT_TASKS: AiTaskId[] = ['polish', 'title', 'tags'];
 
 export default function AddEditEntryScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const { palette } = useTheme();
   const { entries, categories, tags: knownTags, addEntry, updateEntry, addCategory } = useEntries();
-  const { voiceProvider } = useSettings();
   const haptics = useHaptics();
   const toast = useToast();
-  const ai = useAiRunner();
 
   const entryId = route.params?.entryId;
-  const existing = useMemo(
-    () => (entryId ? entries.find((entry) => entry.id === entryId) : undefined),
-    [entryId, entries],
-  );
+  const existing = entryId ? entries.find((entry) => entry.id === entryId) : undefined;
 
   const [title, setTitle] = useState(existing?.title ?? '');
   const [text, setText] = useState(existing?.text ?? route.params?.initialText ?? '');
-  const [status, setStatus] = useState<EntryStatus>(existing?.status ?? 'new');
   const [tags, setTags] = useState<string[]>(existing?.tags ?? []);
   const [categoryId, setCategoryId] = useState<string | undefined>(existing?.categoryId);
-  // Home's quick-add passes `initialKind` (e.g. tapping "Task") so the screen
-  // opens with that kind pre-selected. The dirty check below needs the same
-  // starting point, or picking a kind that way and immediately backing out
-  // reads as an edit and triggers a false "Discard this?" prompt.
-  const initialKind = existing?.kind ?? route.params?.initialKind ?? 'idea';
-  const [kind, setKind] = useState<EntryKind>(initialKind);
-  const [dueAt, setDueAt] = useState<number | undefined>(existing?.dueAt);
   const [newFolder, setNewFolder] = useState('');
   const [showNewFolder, setShowNewFolder] = useState(false);
-  const kindConfig = KIND_CONFIG[kind];
 
   const saved = useRef(false);
-
-  const dictation = useDictation({
-    onText: setText,
-    maxLength: MAX_TEXT_LENGTH,
-    onDenied: useCallback(
-      (reason: DictationDenial) => {
-        haptics.warning();
-        if (reason === 'no-model') {
-          const usingVosk = voiceProvider === 'vosk';
-          Alert.alert(
-            usingVosk ? 'Speech pack needed' : 'No speech recognizer found',
-            usingVosk
-              ? `Voice input needs a one-time ${SPEECH_MODEL_SIZE_LABEL} speech pack. You can get it in Settings.`
-              : "This phone doesn't have a speech recognition service installed. Switch to the offline speech pack in Settings.",
-            [
-              { text: 'Not now', style: 'cancel' },
-              { text: 'Open Settings', onPress: () => navigation.navigate('MainTabs', { screen: 'Settings' }) },
-            ],
-          );
-          return;
-        }
-        const messages: Record<'unsupported' | 'no-permission' | 'failed', string> = {
-          unsupported: 'Voice input is not available on this device.',
-          'no-permission': 'Allow microphone access to dictate.',
-          failed: 'The microphone could not start. Try again.',
-        };
-        toast.show({ message: messages[reason], tone: 'warning' });
-      },
-      [haptics, navigation, toast, voiceProvider],
-    ),
-  });
-  const stopDictation = dictation.stop;
-
-  useFocusEffect(
-    useCallback(
-      () => () => {
-        stopDictation();
-      },
-      [stopDictation],
-    ),
-  );
 
   const dirty =
     title.trim() !== (existing?.title ?? '') ||
     text.trim() !== (existing?.text ?? '') ||
-    status !== (existing?.status ?? 'new') ||
     categoryId !== existing?.categoryId ||
-    kind !== initialKind ||
-    dueAt !== existing?.dueAt ||
     tags.join(',') !== (existing?.tags ?? []).join(',');
 
   /**
@@ -158,59 +80,44 @@ export default function AddEditEntryScreen({ navigation, route }: Props) {
     const trimmed = text.trim();
     if (!trimmed) return;
 
-    dictation.stop();
     Keyboard.dismiss();
     saved.current = true;
 
-    const effectiveDueAt = kind === 'task' ? dueAt : undefined;
-    const payload = {
-      title: title.trim() || undefined,
-      text: trimmed,
-      tags,
-      status,
-      categoryId,
-      kind,
-      dueAt: effectiveDueAt,
-    };
-
     if (existing) {
       updateEntry(existing.id, {
-        ...payload,
         title: title.trim() || null,
+        text: trimmed,
+        tags,
         categoryId: categoryId ?? null,
-        dueAt: effectiveDueAt ?? null,
       });
       toast.show({ message: 'Saved.', tone: 'success' });
     } else {
-      addEntry(payload);
-      toast.show({ message: kindConfig.savedLabel, tone: 'success' });
+      addEntry({
+        title: title.trim() || undefined,
+        text: trimmed,
+        tags,
+        status: 'new',
+        categoryId,
+      });
+      toast.show({ message: 'Added to your box.', tone: 'success' });
     }
     haptics.success();
     navigation.goBack();
   };
 
-  const applyAi = (taskId: AiTaskId, output: string) => {
-    if (taskId === 'polish') {
-      // Hand back a real undo rather than pointing at the text field's own,
-      // which is not dependable on Android and is the wrong thing to be
-      // relying on for the one action here that overwrites what the user
-      // actually wrote.
-      const original = text;
-      setText(output.slice(0, MAX_TEXT_LENGTH));
-      toast.show({
-        message: 'Replaced your text.',
-        action: { label: 'Undo', onPress: () => setText(original) },
-      });
-    } else if (taskId === 'title') {
-      setTitle(output.slice(0, MAX_TITLE_LENGTH));
-    } else if (taskId === 'tags') {
-      // The model's own picks, plus a deterministic pass over the library's
-      // existing tags for anything it missed that is right there in the text.
-      const suggested = [...parseTags(output), ...matchKnownTags(text, knownTags)];
-      setTags((current) => suggested.reduce((acc, tag) => addTag(acc, tag), current));
+  const fixGrammar = () => {
+    const fixed = fixGrammarAndStyle(text);
+    if (fixed === text.trim()) {
+      toast.show({ message: 'Nothing to fix.' });
+      return;
     }
+    const original = text;
+    setText(fixed.slice(0, MAX_TEXT_LENGTH));
     haptics.success();
-    ai.reset();
+    toast.show({
+      message: 'Fixed.',
+      action: { label: 'Undo', onPress: () => setText(original) },
+    });
   };
 
   const createFolder = () => {
@@ -232,7 +139,7 @@ export default function AddEditEntryScreen({ navigation, route }: Props) {
   return (
     <Backdrop>
       <NavBar
-        title={existing ? `Edit ${kindConfig.label.toLowerCase()}` : ''}
+        title={existing ? 'Edit idea' : ''}
         onBack={() => navigation.goBack()}
         backLabel="Cancel"
         borderless
@@ -252,17 +159,6 @@ export default function AddEditEntryScreen({ navigation, route }: Props) {
           keyboardDismissMode="interactive"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.kindTabs} accessibilityRole="tablist">
-            {KIND_ORDER.map((option) => (
-              <TextTab
-                key={option}
-                label={KIND_CONFIG[option].pickerLabel}
-                active={kind === option}
-                onPress={() => setKind(option)}
-              />
-            ))}
-          </View>
-
           <Field
             value={title}
             onChangeText={setTitle}
@@ -276,97 +172,30 @@ export default function AddEditEntryScreen({ navigation, route }: Props) {
           <Field
             value={text}
             onChangeText={setText}
-            placeholder={kindConfig.placeholder}
+            placeholder="A half-formed thought, a what-if, a thing worth trying..."
             multiline
             maxLength={MAX_TEXT_LENGTH}
             showCounter
             variant="plain"
-            hint={dictation.listening ? 'Listening, speak now' : undefined}
             inputStyle={styles.textArea}
             containerStyle={styles.bodyField}
           />
 
-          {dictation.supported ? (
-            <View style={styles.dictationRow}>
-              <Button
-                label={dictation.starting ? 'Starting…' : dictation.listening ? 'Stop listening' : 'Dictate'}
-                onPress={() => void dictation.toggle(text)}
-                variant={dictation.listening ? 'primary' : 'secondary'}
-                size="sm"
-                disabled={ai.running || dictation.starting}
-                loading={dictation.starting}
-                icon={
-                  <Ionicons
-                    name={dictation.listening ? 'stop-circle' : 'mic-outline'}
-                    size={15}
-                    color={dictation.listening ? palette.accentInk : palette.ink}
-                  />
-                }
-              />
-              {dictation.listening ? (
-                <View
-                  style={[
-                    styles.listening,
-                    { borderRadius: radii.pill, backgroundColor: withAlpha(palette.accent, 0.16) },
-                  ]}
-                >
-                  <Ionicons name="radio-button-on" size={11} color={palette.accent} />
-                  <Type role="caption" color={palette.accent} numberOfLines={1} style={styles.listeningText}>
-                    {dictation.partial || 'Listening…'}
-                  </Type>
-                </View>
-              ) : null}
-            </View>
-          ) : null}
-
-          {kind === 'task' ? (
-            <View style={styles.section}>
-              <Type role="label" pressed>
-                Due date
-              </Type>
-              <DatePicker value={dueAt} onChange={setDueAt} />
-            </View>
-          ) : null}
-
-          <View style={styles.section}>
-            <Type role="label" pressed style={styles.sectionLabel}>
-              Assistant
-            </Type>
-            <AiPanel
-              runner={ai}
-              tasks={EDIT_TASKS}
-              disabled={!canSave || dictation.listening}
-              onRun={(taskId) =>
-                void ai.run(
-                  taskId,
-                  text,
-                  knownTags.map((item) => item.tag),
-                )
-              }
-              onApply={applyAi}
-              applyLabel={(taskId) =>
-                taskId === 'polish' ? 'Replace my text' : taskId === 'title' ? 'Use this title' : 'Add these tags'
-              }
-              onOpenSettings={() =>
-                ai.engine === 'remote'
-                  ? navigation.navigate('MainTabs', { screen: 'Settings' })
-                  : navigation.navigate('Models')
-              }
-            />
-          </View>
+          <Button
+            label="Fix grammar & style"
+            onPress={fixGrammar}
+            variant="secondary"
+            size="sm"
+            disabled={!canSave}
+            icon={<Ionicons name="sparkles-outline" size={14} color={palette.ink} />}
+            style={styles.fixButton}
+          />
 
           <View style={styles.detailBlock}>
             <Type role="label" pressed>
               Tags
             </Type>
             <TagInput value={tags} onChange={setTags} suggestions={knownTags.map((item) => item.tag)} />
-          </View>
-
-          <View style={styles.detailBlock}>
-            <Type role="label" pressed>
-              Status
-            </Type>
-            <StatusPicker value={status} onChange={setStatus} />
           </View>
 
           <View style={styles.detailBlock}>
@@ -414,7 +243,7 @@ export default function AddEditEntryScreen({ navigation, route }: Props) {
           </View>
 
           <Button
-            label={existing ? 'Save changes' : kindConfig.saveLabel}
+            label={existing ? 'Save changes' : 'Put it in the box'}
             onPress={handleSave}
             disabled={!canSave}
             variant="primary"
@@ -437,11 +266,6 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     gap: spacing.xl,
   },
-  kindTabs: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'flex-end',
-  },
   titleField: {
     marginTop: spacing.sm,
   },
@@ -457,28 +281,8 @@ const styles = StyleSheet.create({
     lineHeight: 30,
     paddingHorizontal: 0,
   },
-  dictationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  listening: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 7,
-  },
-  listeningText: {
-    flex: 1,
-    fontSize: 14,
-  },
-  section: {
-    gap: spacing.sm,
-  },
-  sectionLabel: {
-    paddingHorizontal: spacing.xs,
+  fixButton: {
+    alignSelf: 'flex-start',
   },
   chipRow: {
     flexDirection: 'row',

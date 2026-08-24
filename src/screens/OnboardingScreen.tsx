@@ -14,16 +14,16 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Onboarding'>;
 
 const PAGES = [
   {
-    title: 'One place for everything',
-    body: 'Ideas, notes, tasks and journal entries live in the same box.',
+    title: 'A simple box for ideas',
+    body: 'Drop in the things you would otherwise forget, one at a time.',
   },
   {
     title: 'Rediscover what you saved',
     body: 'Tap Surprise Me and something comes back when you least expect it.',
   },
   {
-    title: 'A quiet helper',
-    body: 'An optional assistant can tidy wording and suggest tags — on this phone by default.',
+    title: 'Fix it up in one tap',
+    body: 'A grammar & style button tidies your writing right on the phone. No AI, no account, no network.',
   },
   {
     title: 'Yours alone',

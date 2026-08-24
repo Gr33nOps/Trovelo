@@ -3,13 +3,12 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 
-import { KIND_CONFIG, KIND_ORDER } from '../constants/kinds';
 import { STATUS_CONFIG, STATUS_ORDER } from '../constants/status';
 import { PAGE_PAD, radius as radii, spacing, withAlpha } from '../constants/theme';
 import { useEntries } from '../context/EntriesContext';
 import { useTheme } from '../context/ThemeContext';
 import { MainTabScreenProps } from '../navigation';
-import { EntryKind, EntryStatus } from '../types';
+import { EntryStatus } from '../types';
 import { EmptyState } from '../ui/EmptyState';
 import { SectionHeader } from '../ui/Group';
 import { IconTile } from '../ui/IconTile';
@@ -29,56 +28,45 @@ export default function StatsScreen({ navigation }: Props) {
 
   const stats = useMemo(() => {
     const byStatus: Record<EntryStatus, number> = { new: 0, interesting: 0, done: 0, not_useful: 0 };
-    const byKind: Record<EntryKind, number> = { idea: 0, note: 0, task: 0, journal: 0 };
     let rediscoveries = 0;
     let favorites = 0;
     let words = 0;
     let oldestUnseen: number | null = null;
     const now = Date.now();
     let addedThisMonth = 0;
-    let openTasks = 0;
     let archived = 0;
 
     for (const entry of entries) {
       byStatus[entry.status] += 1;
-      byKind[entry.kind ?? 'idea'] += 1;
       rediscoveries += entry.timesRediscovered;
       if (entry.isFavorite) favorites += 1;
       if (entry.archivedAt) archived += 1;
-      if (!entry.archivedAt && entry.kind === 'task' && entry.status !== 'done') openTasks += 1;
       words += entry.text.trim().split(/\s+/).filter(Boolean).length;
       if (now - entry.createdAt < 30 * DAY) addedThisMonth += 1;
-      const eligibleForRediscovery =
-        entry.kind !== 'task' && !entry.archivedAt && entry.status !== 'not_useful';
+      const eligibleForRediscovery = !entry.archivedAt && entry.status !== 'not_useful';
       if (eligibleForRediscovery) {
         const lastSeen = entry.lastViewedAt ?? entry.createdAt;
         if (oldestUnseen === null || lastSeen < oldestUnseen) oldestUnseen = lastSeen;
       }
     }
 
-    const rediscoverable = entries.filter(
-      (entry) => entry.kind !== 'task' && !entry.archivedAt && entry.status !== 'not_useful',
-    );
+    const rediscoverable = entries.filter((entry) => !entry.archivedAt && entry.status !== 'not_useful');
     const neverSeen = rediscoverable.filter((entry) => !entry.lastViewedAt).length;
 
     return {
       total: entries.length,
       byStatus,
-      byKind,
       rediscoveries,
       favorites,
       words,
       addedThisMonth,
       neverSeen,
       rediscoverable: rediscoverable.length,
-      openTasks,
       archived,
       oldestUnseenDays:
         oldestUnseen === null ? 0 : Math.floor((now - oldestUnseen) / DAY),
     };
   }, [entries]);
-
-  const hasMixedKinds = KIND_ORDER.some((kind) => kind !== 'idea' && stats.byKind[kind] > 0);
 
   if (entries.length === 0) {
     return (
@@ -168,55 +156,6 @@ export default function StatsScreen({ navigation }: Props) {
           </Panel>
         </View>
 
-        {hasMixedKinds ? (
-          <View>
-            <SectionHeader title="What is in the box" />
-            <Panel style={styles.card} borderRadius={radii.lg}>
-              {KIND_ORDER.filter((kind) => stats.byKind[kind] > 0).map((kind) => {
-                const count = stats.byKind[kind];
-                const percent = stats.total > 0 ? (count / stats.total) * 100 : 0;
-                return (
-                  <View
-                    key={kind}
-                    style={styles.barRow}
-                    accessibilityLabel={`${KIND_CONFIG[kind].label}: ${count} of ${stats.total}`}
-                  >
-                    <View style={styles.barLabel}>
-                      <Ionicons name={KIND_CONFIG[kind].icon} size={13} color={palette.accent} />
-                      <Type role="caption" color={palette.ink} numberOfLines={1}>
-                        {KIND_CONFIG[kind].label}
-                      </Type>
-                    </View>
-                    <Well style={styles.barTrack} borderRadius={radii.pill}>
-                      <View
-                        style={[
-                          styles.barFill,
-                          { width: `${Math.max(count > 0 ? 3 : 0, percent)}%`, backgroundColor: palette.accent },
-                        ]}
-                      />
-                    </Well>
-                    <Type role="caption" color={palette.inkSoft} style={styles.barCount}>
-                      {count}
-                    </Type>
-                  </View>
-                );
-              })}
-              {stats.openTasks > 0 ? (
-                <Insight
-                  icon="checkbox-outline"
-                  text={`${stats.openTasks} open ${stats.openTasks === 1 ? 'task' : 'tasks'}.`}
-                />
-              ) : null}
-              {stats.archived > 0 ? (
-                <Insight
-                  icon="archive-outline"
-                  text={`${stats.archived} archived ${stats.archived === 1 ? 'entry' : 'entries'}.`}
-                />
-              ) : null}
-            </Panel>
-          </View>
-        ) : null}
-
         <View>
           <SectionHeader title="Worth knowing" />
           <Panel style={styles.card} borderRadius={radii.lg}>
@@ -244,6 +183,12 @@ export default function StatsScreen({ navigation }: Props) {
               icon="text-outline"
               text={`About ${stats.words.toLocaleString()} words written in total.`}
             />
+            {stats.archived > 0 ? (
+              <Insight
+                icon="archive-outline"
+                text={`${stats.archived} archived ${stats.archived === 1 ? 'entry' : 'entries'}.`}
+              />
+            ) : null}
           </Panel>
         </View>
 

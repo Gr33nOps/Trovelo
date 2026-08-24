@@ -4,18 +4,14 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
-import { AiPanel } from '../components/AiPanel';
 import { StatusBadge } from '../components/StatusBadge';
 import { StatusPicker } from '../components/StatusPicker';
-import { KIND_CONFIG } from '../constants/kinds';
 import { PAGE_PAD, radius as radii, spacing, withAlpha } from '../constants/theme';
 import { useEntries } from '../context/EntriesContext';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
-import { useAiRunner } from '../hooks/useAiRunner';
 import { useHaptics } from '../hooks/useHaptics';
 import { RootStackParamList } from '../navigation';
-import { AiTaskId } from '../services/ai';
 import { ActionSheet } from '../ui/ActionSheet';
 import { Button } from '../ui/Button';
 import { Field } from '../ui/Field';
@@ -25,13 +21,11 @@ import { Backdrop, Panel, Rule } from '../ui/Surface';
 import { Type } from '../ui/Type';
 import { formatDate, formatRelativeDay } from '../utils/date';
 import { findRelated } from '../utils/search';
-import { addTag, displayTag, matchKnownTags, parseTags } from '../utils/tags';
+import { displayTag } from '../utils/tags';
 
 const DAY_MS = 86_400_000;
 
 type Props = NativeStackScreenProps<RootStackParamList, 'EntryDetail'>;
-
-const DETAIL_TASKS: AiTaskId[] = ['summary', 'expand', 'spark', 'tags'];
 
 export default function EntryDetailScreen({ navigation, route }: Props) {
   const { entryId } = route.params;
@@ -40,7 +34,6 @@ export default function EntryDetailScreen({ navigation, route }: Props) {
   const {
     entries,
     categories,
-    tags: knownTags,
     updateEntry,
     deleteEntry,
     restoreEntry,
@@ -50,8 +43,6 @@ export default function EntryDetailScreen({ navigation, route }: Props) {
   } = useEntries();
   const haptics = useHaptics();
   const toast = useToast();
-  const ai = useAiRunner();
-  const resetAi = ai.reset;
 
   const [followUpText, setFollowUpText] = useState('');
   const [moreOpen, setMoreOpen] = useState(false);
@@ -62,9 +53,8 @@ export default function EntryDetailScreen({ navigation, route }: Props) {
     setFollowUpText('');
     setMoreOpen(false);
     setReminderOpen(false);
-    resetAi();
     scrollRef.current?.scrollTo({ y: 0, animated: false });
-  }, [entryId, resetAi]);
+  }, [entryId]);
 
   const entry = useMemo(() => entries.find((item) => item.id === entryId), [entries, entryId]);
   const folder = useMemo(
@@ -82,25 +72,11 @@ export default function EntryDetailScreen({ navigation, route }: Props) {
     // An undo beats a confirmation dialog: nothing is lost, and the common
     // case (a deliberate delete) costs no extra tap.
     toast.show({
-      message: `${KIND_CONFIG[snapshot.kind ?? 'idea'].label} deleted.`,
+      message: 'Idea deleted.',
       tone: 'warning',
       action: { label: 'Undo', onPress: () => restoreEntry(snapshot) },
     });
   }, [entry, deleteEntry, restoreEntry, haptics, navigation, toast]);
-
-  const applyAi = useCallback(
-    (taskId: AiTaskId, output: string) => {
-      if (!entry) return;
-      if (taskId === 'tags') {
-        const suggested = [...parseTags(output), ...matchKnownTags(entry.text, knownTags)];
-        const next = suggested.reduce((tags, tag) => addTag(tags, tag), entry.tags);
-        updateEntry(entry.id, { tags: next });
-        toast.show({ message: 'Tags added.', tone: 'success' });
-      }
-      ai.reset();
-    },
-    [entry, knownTags, updateEntry, toast, ai],
-  );
 
   const setReminder = useCallback(
     (offsetMs: number) => {
@@ -145,12 +121,10 @@ export default function EntryDetailScreen({ navigation, route }: Props) {
     );
   }
 
-  const kindConfig = KIND_CONFIG[entry.kind ?? 'idea'];
-
   return (
     <Backdrop>
       <NavBar
-        title={kindConfig.label}
+        title=""
         onBack={() => navigation.goBack()}
         borderless
         right={
@@ -178,9 +152,6 @@ export default function EntryDetailScreen({ navigation, route }: Props) {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.card}>
-          <Type role="label" color={palette.inkFaint}>
-            {kindConfig.label}
-          </Type>
           {entry.title ? (
             <Type role="title" pressed>
               {entry.title}
@@ -224,16 +195,6 @@ export default function EntryDetailScreen({ navigation, route }: Props) {
               </Type>
               <Type role="caption">{formatDate(entry.createdAt)}</Type>
             </View>
-            {entry.kind === 'task' && entry.dueAt ? (
-              <View style={styles.metaColumn}>
-                <Type role="label" pressed>
-                  Due
-                </Type>
-                <Type role="caption" color={entry.status !== 'done' && entry.dueAt < Date.now() ? palette.danger : undefined}>
-                  {formatDate(entry.dueAt)}
-                </Type>
-              </View>
-            ) : null}
             {entry.isPinned || entry.archivedAt ? (
               <View style={styles.metaColumn}>
                 <Type role="label" pressed>
@@ -276,31 +237,6 @@ export default function EntryDetailScreen({ navigation, route }: Props) {
             </View>
           ) : null}
         </Panel>
-
-        <View style={styles.section}>
-          <Type role="label" pressed style={styles.sectionLabel}>
-            Look at it differently
-          </Type>
-          <AiPanel
-            runner={ai}
-            tasks={DETAIL_TASKS}
-            onRun={(taskId) =>
-              void ai.run(
-                taskId,
-                entry.text,
-                knownTags.map((item) => item.tag),
-              )
-            }
-            onApply={applyAi}
-            // Only the tag suggestions change the entry; the rest are for reading.
-            applyLabel={(taskId) => (taskId === 'tags' ? 'Add these tags' : null)}
-            onOpenSettings={() =>
-              ai.engine === 'remote'
-                ? navigation.navigate('MainTabs', { screen: 'Settings' })
-                : navigation.navigate('Models')
-            }
-          />
-        </View>
 
         <Panel style={styles.card} borderRadius={radii.lg}>
           <Type role="label" pressed>
@@ -358,7 +294,6 @@ export default function EntryDetailScreen({ navigation, route }: Props) {
                     accessibilityLabel={item.title ?? item.text.slice(0, 60)}
                     style={({ pressed }) => [styles.relatedRow, { opacity: pressed ? 0.65 : 1 }]}
                   >
-                    <Ionicons name={KIND_CONFIG[item.kind ?? 'idea'].icon} size={15} color={palette.inkFaint} />
                     <View style={styles.relatedText}>
                       <Type role="bodyStrong" numberOfLines={1}>
                         {item.title ?? item.text}
@@ -401,7 +336,7 @@ export default function EntryDetailScreen({ navigation, route }: Props) {
         </View>
 
         <Button
-          label={`Delete ${kindConfig.label.toLowerCase()}`}
+          label="Delete idea"
           variant="danger"
           size="md"
           fullWidth
@@ -412,7 +347,7 @@ export default function EntryDetailScreen({ navigation, route }: Props) {
 
       <ActionSheet
         visible={moreOpen}
-        title={entry.title ?? `This ${kindConfig.label.toLowerCase()}`}
+        title={entry.title ?? 'This idea'}
         onClose={() => setMoreOpen(false)}
         actions={[
           {

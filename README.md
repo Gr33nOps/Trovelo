@@ -3,38 +3,30 @@
 [![Release](https://img.shields.io/github/v/release/Gr33nOps/trovelo?color=%234d5f33&label=release)](https://github.com/Gr33nOps/trovelo/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-7a7f7c.svg)](LICENSE)
 
-A keepsake box for loose ideas. Drop in the things you'd otherwise forget — a book someone
-mentioned, a half-formed plan, a line you liked — then press **Surprise Me** and meet one of them
-again when you least expect it.
+A simple box for ideas. Drop in the things you'd otherwise forget — a book someone mentioned, a
+half-formed plan, a line you liked — then press **Surprise Me** and meet one of them again when
+you least expect it.
 
-Everything stays on your phone by default. No account, no server, no analytics. The writing
-assistant and voice dictation run on-device unless you deliberately opt into a cloud provider in
-Settings.
+Everything stays on your phone. No account, no server, no AI, no network access of any kind.
 
 ## Features
 
 - **Surprise Me** — resurface one saved idea at a time, weighted by how long it's been neglected
-- **Four kinds of entries** — Idea, Note, Task and Journal, all in one searchable box
-- **On-device AI assistant** — a GGUF model running locally via [llama.rn](https://github.com/mybigday/llama.rn); optional OpenAI-compatible cloud (Groq, OpenRouter, Gemini, or self-hosted)
-- **Offline voice dictation** — Vosk speech pack by default, switchable to the system recognizer
-- **Library** — ranked search with typo tolerance, filters, sorting, and voice search
+- **Fix grammar & style** — a one-tap, rule-based cleanup of spacing, punctuation and capitalisation. No model, no network.
+- **Library** — ranked search with typo tolerance, filters and sorting
 - **Streaks & weekly review** — keep what matters in front of you, deliberately
 - **Backups** — encrypted JSON or plain Markdown export; restore merges instead of overwriting
 - **Dark mode & custom accent** — one calm design language, reskinned from a single theme file
 
 ## Privacy
 
-- No account, no telemetry. With cloud AI and Android system dictation disabled, runtime network
-  traffic is limited to user-initiated AI and speech-model downloads.
+- No account, no telemetry, no network requests. The app has no INTERNET permission on Android.
 - Backup encryption: AES-256-CBC + HMAC-SHA256, PBKDF2 with 150,000 iterations.
-- Cloud AI sends the selected entry text to the endpoint shown in Settings. Android system
-  dictation may use the device vendor's speech service. Both are off by default and reversible.
 
 ## Install
 
 Grab the latest APK from [Releases](https://github.com/Gr33nOps/trovelo/releases) and allow
-"install from unknown sources" on your phone. To build it yourself, see below — note that
-**Expo Go won't work**, since the app ships custom native modules.
+"install from unknown sources" on your phone. To build it yourself, see below.
 
 ## Development
 
@@ -56,9 +48,9 @@ Building an APK:
 - **Local release:** supply all four `TROVELO_UPLOAD_*` Gradle properties, then run
   `./gradlew assembleRelease`. A release never falls back to the public debug key.
 
-The committed `android/` project is authoritative. It includes hand-written offline-speech
-modules and packaging rules that `expo prebuild` cannot safely recreate; do not delete or blindly
-regenerate it from `app.json`.
+The committed `android/` project is authoritative. It includes hand-tuned signing and packaging
+rules that `expo prebuild` cannot safely recreate; do not delete or blindly regenerate it from
+`app.json`.
 
 ## Releases
 
@@ -82,8 +74,6 @@ upload keystore and its passwords outside the repository and retain a secure rec
 | Language | TypeScript (strict) |
 | Navigation | React Navigation 7 |
 | Storage | AsyncStorage, validated on load |
-| AI | llama.rn (on-device) or any OpenAI-compatible endpoint |
-| Speech | Vosk or Android `SpeechRecognizer` |
 
 ## License
 

@@ -7,27 +7,19 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { StatusPicker } from '../components/StatusPicker';
 import { SurpriseCard } from '../components/SurpriseCard';
-import { KIND_CONFIG, KIND_ORDER } from '../constants/kinds';
 import { HIT_SLOP, PAGE_PAD, radius as radii, spacing, withAlpha } from '../constants/theme';
 import { useEntries } from '../context/EntriesContext';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useHaptics } from '../hooks/useHaptics';
 import { MainTabScreenProps } from '../navigation';
-import { EntryKind, EntryStatus } from '../types';
+import { EntryStatus } from '../types';
 import { Button } from '../ui/Button';
 import { IconButton } from '../ui/Controls';
 import { EmptyState } from '../ui/EmptyState';
 import { Backdrop, Rule } from '../ui/Surface';
 import { Type } from '../ui/Type';
-import {
-  daysUntil,
-  dayKey,
-  formatDate,
-  formatDueLabel,
-  isOnThisDay,
-  yearsAgo,
-} from '../utils/date';
+import { dayKey, formatDate, isOnThisDay, yearsAgo } from '../utils/date';
 import { pickSurprise } from '../utils/random';
 
 type Props = MainTabScreenProps<'Home'>;
@@ -61,40 +53,14 @@ export default function HomeScreen({ navigation }: Props) {
 
   useEffect(() => setMemoryDismissed(false), [currentDay]);
 
-  const todayJournal = useMemo(
+  const reminders = useMemo(
     () =>
-      entries.find(
-        (entry) =>
-          entry.kind === 'journal' && !entry.archivedAt && dayKey(new Date(entry.createdAt)) === currentDay,
-      ),
-    [entries, currentDay],
+      entries
+        .filter((entry) => !entry.archivedAt && entry.remindAt !== undefined && entry.remindAt <= now)
+        .sort((a, b) => (a.remindAt ?? 0) - (b.remindAt ?? 0))
+        .slice(0, 4),
+    [entries, now],
   );
-
-  const todayItems = useMemo(() => {
-    const due = entries
-      .filter(
-        (entry) =>
-          !entry.archivedAt &&
-          entry.kind === 'task' &&
-          entry.status !== 'done' &&
-          entry.dueAt !== undefined &&
-          daysUntil(entry.dueAt, new Date(now)) <= 0,
-      )
-      .sort((a, b) => (a.dueAt ?? 0) - (b.dueAt ?? 0))
-      .map((entry) => ({ entry, reason: 'due' as const }));
-    const reminders = entries
-      .filter((entry) => !entry.archivedAt && entry.remindAt !== undefined && entry.remindAt <= now)
-      .sort((a, b) => (a.remindAt ?? 0) - (b.remindAt ?? 0))
-      .map((entry) => ({ entry, reason: 'reminder' as const }));
-    const seen = new Set<string>();
-    return [...due, ...reminders]
-      .filter(({ entry }) => {
-        if (seen.has(entry.id)) return false;
-        seen.add(entry.id);
-        return true;
-      })
-      .slice(0, 4);
-  }, [entries, now]);
 
   const onThisDay = useMemo(
     () => entries.filter((entry) => !entry.archivedAt && isOnThisDay(entry.createdAt, new Date(now))).slice(0, 2),
@@ -248,50 +214,17 @@ export default function HomeScreen({ navigation }: Props) {
           </View>
         )}
 
-        <View style={styles.section}>
-          <Type role="label">Today</Type>
-          <Pressable
-            onPress={() =>
-              todayJournal
-                ? navigation.navigate('EntryDetail', { entryId: todayJournal.id })
-                : navigation.navigate('EntryEdit', { initialKind: 'journal' })
-            }
-            style={({ pressed }) => [styles.line, { opacity: pressed ? 0.55 : 1 }]}
-            accessibilityRole="button"
-            accessibilityLabel={todayJournal ? "Open today's journal" : "Write today's journal"}
-          >
-            <Type role="bodyStrong">{todayJournal ? "Today's journal" : 'Write today'}</Type>
-            <Type role="caption" color={palette.inkFaint} numberOfLines={1}>
-              {todayJournal ? todayJournal.text : 'A line or two about how today is going.'}
-            </Type>
-          </Pressable>
-          {todayItems.map(({ entry, reason }) => {
-            const overdue = reason === 'due' && !!entry.dueAt && daysUntil(entry.dueAt, new Date(now)) < 0;
-            const reminderDue = entry.remindAt !== undefined && entry.remindAt <= now;
-            return (
+        {reminders.length > 0 ? (
+          <View style={styles.section}>
+            <Type role="label">Reminders</Type>
+            {reminders.map((entry, i) => (
               <View key={entry.id}>
-                <Rule />
+                {i > 0 ? <Rule /> : null}
                 <View style={styles.lineRow}>
-                  {reason === 'due' ? (
-                    <Pressable
-                      onPress={() => {
-                        haptics.success();
-                        if (reminderDue) updateEntry(entry.id, { remindAt: null });
-                        setStatus(entry.id, 'done');
-                      }}
-                      hitSlop={HIT_SLOP}
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ checked: false }}
-                      accessibilityLabel="Mark task done"
-                    >
-                      <Ionicons name="square-outline" size={20} color={palette.inkFaint} />
-                    </Pressable>
-                  ) : (
-                    <Ionicons name="notifications-outline" size={18} color={palette.inkSoft} />
-                  )}
+                  <Ionicons name="notifications-outline" size={18} color={palette.inkSoft} />
                   <Pressable
                     onPress={() => {
-                      if (reminderDue) updateEntry(entry.id, { remindAt: null });
+                      updateEntry(entry.id, { remindAt: null });
                       navigation.navigate('EntryDetail', { entryId: entry.id });
                     }}
                     style={styles.flex}
@@ -301,23 +234,21 @@ export default function HomeScreen({ navigation }: Props) {
                     <Type role="bodyStrong" numberOfLines={1}>
                       {entry.title ?? entry.text}
                     </Type>
-                    <Type role="caption" color={overdue ? palette.danger : palette.inkFaint} numberOfLines={1}>
-                      {reason === 'due' && entry.dueAt ? formatDueLabel(entry.dueAt) : 'Reminder'}
+                    <Type role="caption" color={palette.inkFaint} numberOfLines={1}>
+                      Reminder
                     </Type>
                   </Pressable>
-                  {reason === 'reminder' ? (
-                    <IconButton
-                      icon="close"
-                      label="Dismiss reminder"
-                      size={16}
-                      onPress={() => updateEntry(entry.id, { remindAt: null })}
-                    />
-                  ) : null}
+                  <IconButton
+                    icon="close"
+                    label="Dismiss reminder"
+                    size={16}
+                    onPress={() => updateEntry(entry.id, { remindAt: null })}
+                  />
                 </View>
               </View>
-            );
-          })}
-        </View>
+            ))}
+          </View>
+        ) : null}
 
         {onThisDay.length > 0 && !memoryDismissed ? (
           <View style={styles.section}>
@@ -348,25 +279,6 @@ export default function HomeScreen({ navigation }: Props) {
             })}
           </View>
         ) : null}
-
-        <View style={styles.quickAdd}>
-          {KIND_ORDER.map((kind) => (
-            <Pressable
-              key={kind}
-              onPress={() => {
-                haptics.light();
-                navigation.navigate('EntryEdit', { initialKind: kind as EntryKind });
-              }}
-              style={({ pressed }) => [styles.quickItem, { opacity: pressed ? 0.55 : 1 }]}
-              accessibilityRole="button"
-              accessibilityLabel={`Add ${KIND_CONFIG[kind].label}`}
-            >
-              <Type role="caption" color={palette.inkSoft} style={styles.quickLabel}>
-                {KIND_CONFIG[kind].label}
-              </Type>
-            </Pressable>
-          ))}
-        </View>
       </ScrollView>
     </Backdrop>
   );
@@ -433,19 +345,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     paddingVertical: spacing.sm,
-  },
-  quickAdd: {
-    flexDirection: 'row',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'transparent',
-    gap: spacing.sm,
-  },
-  quickItem: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-  },
-  quickLabel: {
-    fontWeight: '600',
   },
 });

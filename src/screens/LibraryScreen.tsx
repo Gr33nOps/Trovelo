@@ -2,26 +2,21 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppState, FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AskBoxPanel } from '../components/AskBoxPanel';
 import { EntryCard } from '../components/EntryCard';
-import { KIND_CONFIG, KIND_ORDER } from '../constants/kinds';
 import { STATUS_FILTER_OPTIONS } from '../constants/status';
 import { HIT_SLOP, PAGE_PAD, fonts, fontSizes, spacing } from '../constants/theme';
 import { useEntries } from '../context/EntriesContext';
-import { useSettings } from '../context/SettingsContext';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useDebouncedValue } from '../hooks/useDebounce';
-import { DictationDenial, useDictation } from '../hooks/useDictation';
 import { useHaptics } from '../hooks/useHaptics';
 import { MainTabScreenProps } from '../navigation';
-import { Entry, EntryKind, SortOrder, StatusFilter } from '../types';
+import { Entry, SortOrder, StatusFilter } from '../types';
 import { ActionSheet } from '../ui/ActionSheet';
 import { Button } from '../ui/Button';
-import { Chip, IconButton, TextTab } from '../ui/Controls';
+import { Chip, IconButton } from '../ui/Controls';
 import { EmptyState } from '../ui/EmptyState';
 import { Backdrop, Rule } from '../ui/Surface';
 import { Type } from '../ui/Type';
@@ -29,7 +24,6 @@ import { searchEntries } from '../utils/search';
 import { displayTag } from '../utils/tags';
 import { todayKey } from '../utils/date';
 
-type KindFilter = 'all' | EntryKind | 'archived';
 type Props = MainTabScreenProps<'Library'>;
 
 const SORT_LABELS: Record<SortOrder, string> = {
@@ -61,8 +55,7 @@ export default function LibraryScreen({ navigation, route }: Props) {
   const tabBarHeight = useBottomTabBarHeight();
   const insets = useSafeAreaInsets();
   const { palette } = useTheme();
-  const { voiceProvider } = useSettings();
-  const { entries, categories, loaded, tags: allTags, deleteEntry, restoreEntry, toggleFavorite, updateEntry, setStatus } =
+  const { entries, categories, loaded, tags: allTags, deleteEntry, restoreEntry, toggleFavorite, updateEntry } =
     useEntries();
   const haptics = useHaptics();
   const toast = useToast();
@@ -72,9 +65,8 @@ export default function LibraryScreen({ navigation, route }: Props) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [tagFilter, setTagFilter] = useState<string | null>(route.params?.tag ?? null);
-  const [kindFilter, setKindFilter] = useState<KindFilter>(route.params?.kind ?? 'all');
+  const [showArchived, setShowArchived] = useState(false);
   const [sort, setSort] = useState<SortOrder>('newest');
-  const [showAsk, setShowAsk] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [actionEntry, setActionEntry] = useState<Entry | null>(null);
   const [dayVersion, setDayVersion] = useState(todayKey);
@@ -95,41 +87,6 @@ export default function LibraryScreen({ navigation, route }: Props) {
     if (route.params?.tag) setTagFilter(route.params.tag);
   }, [route.params?.tag]);
 
-  useEffect(() => {
-    if (route.params?.kind) setKindFilter(route.params.kind);
-  }, [route.params?.kind]);
-
-  const dictation = useDictation({
-    onText: setQuery,
-    maxLength: 120,
-    onDenied: useCallback(
-      (reason: DictationDenial) => {
-        const messages: Record<DictationDenial, string> = {
-          unsupported: 'Voice input is not available on this device.',
-          'no-model':
-            voiceProvider === 'vosk'
-              ? 'Voice input needs a speech pack. Get it in Settings.'
-              : "No speech recognizer installed. Switch to the offline pack in Settings.",
-          'no-permission': 'Allow microphone access to search by voice.',
-          failed: 'The microphone could not start. Try again.',
-        };
-        haptics.warning();
-        toast.show({ message: messages[reason], tone: 'warning' });
-      },
-      [haptics, toast, voiceProvider],
-    ),
-  });
-  const stopDictation = dictation.stop;
-
-  useFocusEffect(
-    useCallback(
-      () => () => {
-        stopDictation();
-      },
-      [stopDictation],
-    ),
-  );
-
   const folderNames = useMemo(
     () => new Map(categories.map((c) => [c.id, c.name])),
     [categories],
@@ -139,11 +96,10 @@ export default function LibraryScreen({ navigation, route }: Props) {
 
   const filtered = useMemo(() => {
     const matches = entries.filter((entry) => {
-      if (kindFilter === 'archived') {
+      if (showArchived) {
         if (!entry.archivedAt) return false;
-      } else {
-        if (entry.archivedAt) return false;
-        if (kindFilter !== 'all' && (entry.kind ?? 'idea') !== kindFilter) return false;
+      } else if (entry.archivedAt) {
+        return false;
       }
       if (statusFilter === 'favorites') {
         if (!entry.isFavorite) return false;
@@ -170,7 +126,7 @@ export default function LibraryScreen({ navigation, route }: Props) {
     const pinned = sorted.filter((e) => e.isPinned);
     const rest = sorted.filter((e) => !e.isPinned);
     return pinned.length ? [...pinned, ...rest] : sorted;
-  }, [entries, debouncedQuery, statusFilter, categoryFilter, tagFilter, kindFilter, sort]);
+  }, [entries, debouncedQuery, statusFilter, categoryFilter, tagFilter, showArchived, sort]);
 
   const openEntry = useCallback(
     (entry: Entry) => navigation.navigate('EntryDetail', { entryId: entry.id }),
@@ -193,21 +149,13 @@ export default function LibraryScreen({ navigation, route }: Props) {
         onPress={() => openEntry(item)}
         onLongPress={() => showActions(item)}
         dayVersion={dayVersion}
-        onToggleDone={
-          item.kind === 'task'
-            ? () => {
-                haptics.light();
-                setStatus(item.id, item.status === 'done' ? 'new' : 'done');
-              }
-            : undefined
-        }
       />
     ),
-    [folderNames, openEntry, showActions, haptics, setStatus, dayVersion],
+    [folderNames, openEntry, showActions, dayVersion],
   );
 
   const activeExtra =
-    (statusFilter !== 'all' ? 1 : 0) + (categoryFilter ? 1 : 0) + (tagFilter ? 1 : 0) + (kindFilter === 'archived' ? 1 : 0);
+    (statusFilter !== 'all' ? 1 : 0) + (categoryFilter ? 1 : 0) + (tagFilter ? 1 : 0) + (showArchived ? 1 : 0);
 
   const header = (
     <View style={styles.header}>
@@ -247,43 +195,7 @@ export default function LibraryScreen({ navigation, route }: Props) {
           cursorColor={palette.accent}
           style={[styles.searchInput, { color: palette.ink, fontFamily: fonts.body, fontSize: fontSizes.md }]}
         />
-        {dictation.supported ? (
-          <IconButton
-            icon={dictation.listening ? 'stop-circle' : 'mic-outline'}
-            label={dictation.listening ? 'Stop' : 'Voice search'}
-            size={20}
-            active={dictation.listening}
-            onPress={() => void dictation.toggle('')}
-          />
-        ) : null}
         {query ? <IconButton icon="close-circle" label="Clear" size={20} onPress={() => setQuery('')} /> : null}
-        <IconButton
-          icon="chatbubble-ellipses-outline"
-          label="Ask"
-          size={20}
-          active={showAsk}
-          onPress={() => setShowAsk((v) => !v)}
-        />
-      </View>
-
-      {showAsk ? (
-        <AskBoxPanel
-          entries={entries}
-          onOpenEntry={(id) => navigation.navigate('EntryDetail', { entryId: id })}
-          onOpenSettings={() => navigation.navigate('Models')}
-        />
-      ) : null}
-
-      <View style={styles.tabs} accessibilityRole="tablist">
-        <TextTab label="All" active={kindFilter === 'all'} onPress={() => setKindFilter('all')} />
-        {KIND_ORDER.map((k) => (
-          <TextTab
-            key={k}
-            label={KIND_CONFIG[k].pickerLabel}
-            active={kindFilter === k}
-            onPress={() => setKindFilter(k)}
-          />
-        ))}
       </View>
 
       <View style={styles.toolbar}>
@@ -318,7 +230,7 @@ export default function LibraryScreen({ navigation, route }: Props) {
       {showFilters ? (
         <View style={styles.filters}>
           <View style={styles.chips}>
-            <Chip label="Archived" active={kindFilter === 'archived'} onPress={() => setKindFilter('archived')} />
+            <Chip label="Archived" active={showArchived} onPress={() => setShowArchived((v) => !v)} />
             {STATUS_FILTER_OPTIONS.map((o) => (
               <Chip
                 key={o.value}
@@ -392,7 +304,7 @@ export default function LibraryScreen({ navigation, route }: Props) {
                 setStatusFilter('all');
                 setCategoryFilter(null);
                 setTagFilter(null);
-                setKindFilter('all');
+                setShowArchived(false);
               }}
             />
           )
@@ -400,7 +312,7 @@ export default function LibraryScreen({ navigation, route }: Props) {
       />
       <ActionSheet
         visible={actionEntry !== null}
-        title={actionEntry?.title ?? (actionEntry ? KIND_CONFIG[actionEntry.kind ?? 'idea'].label : 'Entry')}
+        title={actionEntry?.title ?? 'Idea'}
         onClose={() => setActionEntry(null)}
         actions={
           actionEntry
@@ -467,12 +379,6 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     paddingVertical: spacing.md,
-  },
-  tabs: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'flex-end',
-    marginTop: -spacing.sm,
   },
   toolbar: {
     flexDirection: 'row',

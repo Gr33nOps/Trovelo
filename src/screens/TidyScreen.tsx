@@ -1,14 +1,12 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { TagInput } from '../components/TagInput';
-import { radius as radii, spacing, withAlpha } from '../constants/theme';
+import { radius as radii, spacing } from '../constants/theme';
 import { useEntries } from '../context/EntriesContext';
 import { useTheme } from '../context/ThemeContext';
-import { useAiRunner } from '../hooks/useAiRunner';
 import { useHaptics } from '../hooks/useHaptics';
 import { RootStackParamList } from '../navigation';
 import { Button } from '../ui/Button';
@@ -16,21 +14,19 @@ import { EmptyState } from '../ui/EmptyState';
 import { NavBar } from '../ui/NavBar';
 import { Backdrop, Panel } from '../ui/Surface';
 import { Type } from '../ui/Type';
-import { MAX_TAGS_PER_ENTRY, dedupe, matchKnownTags, parseTags } from '../utils/tags';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Tidy'>;
 
 /**
- * Walks every untagged entry once, suggesting tags with the model already on
- * the phone and letting the user accept, tweak or skip each one. The queue is
- * a snapshot taken on open so tagging one entry does not shift the rest.
+ * Walks every untagged entry once, letting the user add tags to each one and
+ * skip the rest. The queue is a snapshot taken on open so tagging one entry
+ * does not shift the rest.
  */
 export default function TidyScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const { palette } = useTheme();
   const { entries, tags: allTags, updateEntry } = useEntries();
   const haptics = useHaptics();
-  const ai = useAiRunner();
 
   const [queueIds] = useState<string[]>(() =>
     entries.filter((entry) => entry.tags.length === 0 && !entry.archivedAt).map((entry) => entry.id),
@@ -38,9 +34,6 @@ export default function TidyScreen({ navigation }: Props) {
   const [index, setIndex] = useState(0);
   const [tagged, setTagged] = useState(0);
   const [pendingTags, setPendingTags] = useState<string[]>([]);
-  const [attempted, setAttempted] = useState(false);
-  const [retryNonce, setRetryNonce] = useState(0);
-  const manuallyEdited = useRef(false);
 
   const current = index < queueIds.length ? entries.find((entry) => entry.id === queueIds[index]) : undefined;
 
@@ -49,37 +42,10 @@ export default function TidyScreen({ navigation }: Props) {
   }, [index, queueIds.length, current]);
 
   useEffect(() => {
-    let active = true;
-    ai.reset();
     setPendingTags([]);
-    setAttempted(false);
-    manuallyEdited.current = false;
-    if (current && ai.engine === 'local' && ai.availability === 'ready') {
-      void ai
-        .run(
-          'tags',
-          current.text,
-          allTags.map((item) => item.tag),
-        )
-        .then((result) => {
-          if (!active) return;
-          setAttempted(true);
-          if (!result || manuallyEdited.current) return;
-          const suggested = dedupe([...parseTags(result), ...matchKnownTags(current.text, allTags)]);
-          setPendingTags(suggested.slice(0, MAX_TAGS_PER_ENTRY));
-        });
-    }
-    return () => {
-      active = false;
-    };
-    // Runs once per entry, and again once the model finishes its readiness check.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current?.id, ai.availability, ai.engine, retryNonce]);
+  }, [current?.id]);
 
-  const advance = () => {
-    ai.cancel();
-    setIndex((value) => value + 1);
-  };
+  const advance = () => setIndex((value) => value + 1);
 
   const acceptTags = () => {
     if (!current || pendingTags.length === 0) return;
@@ -94,12 +60,6 @@ export default function TidyScreen({ navigation }: Props) {
     advance();
   };
 
-  const retry = () => {
-    ai.cancel();
-    ai.reset();
-    setRetryNonce((value) => value + 1);
-  };
-
   if (queueIds.length === 0) {
     return (
       <Backdrop>
@@ -110,36 +70,6 @@ export default function TidyScreen({ navigation }: Props) {
           subtitle="Everything in your box already has at least one tag."
           actionLabel="Back to the box"
           onAction={() => navigation.goBack()}
-        />
-      </Backdrop>
-    );
-  }
-
-  if (ai.engine !== 'local') {
-    return (
-      <Backdrop>
-        <NavBar title="Tidy up" onBack={() => navigation.goBack()} />
-        <EmptyState
-          icon="phone-portrait-outline"
-          title="Tidy stays on this phone"
-          subtitle="Bulk tidying never sends your box to a cloud provider. Switch to the local assistant to continue."
-          actionLabel="Open assistant settings"
-          onAction={() => navigation.navigate('MainTabs', { screen: 'Settings' })}
-        />
-      </Backdrop>
-    );
-  }
-
-  if (ai.availability === 'disabled' || ai.availability === 'no-model') {
-    return (
-      <Backdrop>
-        <NavBar title="Tidy up" onBack={() => navigation.goBack()} />
-        <EmptyState
-          icon="hardware-chip-outline"
-          title="Needs the local assistant"
-          subtitle="Tidying suggests tags using the assistant on this phone. Turn it on and pick a model first."
-          actionLabel="Set up the assistant"
-          onAction={() => navigation.navigate('Models')}
         />
       </Backdrop>
     );
@@ -196,46 +126,15 @@ export default function TidyScreen({ navigation }: Props) {
         </Panel>
 
         <Panel style={styles.card} borderRadius={radii.lg}>
-          <View style={styles.suggestHeader}>
-            <Ionicons name="pricetag-outline" size={16} color={palette.inkFaint} />
-            <Type role="label" pressed>
-              Suggested tags
-            </Type>
-            {ai.running ? (
-              <Type role="caption" color={palette.inkFaint}>
-                Reading…
-              </Type>
-            ) : null}
-          </View>
+          <Type role="label" pressed>
+            Tags
+          </Type>
           <TagInput
             key={current.id}
             value={pendingTags}
-            onChange={(tags) => {
-              manuallyEdited.current = true;
-              setPendingTags(tags);
-            }}
+            onChange={setPendingTags}
             suggestions={allTags.map((item) => item.tag)}
           />
-          {ai.error ? (
-            <View
-              style={[
-                styles.error,
-                { borderRadius: radii.md, backgroundColor: withAlpha(palette.danger, 0.12) },
-              ]}
-            >
-              <Type role="caption" color={palette.danger} style={styles.errorText}>
-                {ai.error}
-              </Type>
-              <Button label="Retry" variant="secondary" size="sm" onPress={retry} />
-            </View>
-          ) : attempted && pendingTags.length === 0 ? (
-            <View style={styles.emptySuggestion}>
-              <Type role="caption" color={palette.inkFaint} style={styles.errorText}>
-                No useful tags came back. Add one yourself, retry, or skip this entry.
-              </Type>
-              <Button label="Retry" variant="plain" size="sm" onPress={retry} />
-            </View>
-          ) : null}
         </Panel>
 
         <View style={styles.actionRow}>
@@ -263,25 +162,6 @@ const styles = StyleSheet.create({
   card: {
     padding: spacing.lg,
     gap: spacing.md,
-  },
-  suggestHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  error: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    padding: spacing.md,
-  },
-  emptySuggestion: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  errorText: {
-    flex: 1,
   },
   actionRow: {
     flexDirection: 'row',

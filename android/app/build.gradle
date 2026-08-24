@@ -105,8 +105,8 @@ android {
         applicationId 'com.trovelo.app'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 15
-        versionName "1.13.1"
+        versionCode 16
+        versionName "2.0.0"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }
@@ -148,21 +148,6 @@ android {
         jniLibs {
             def enableLegacyPackaging = findProperty('expo.useLegacyPackaging') ?: 'false'
             useLegacyPackaging enableLegacyPackaging.toBoolean()
-            // llama.rn's AAR bundles 8 arm64 variants of the same library, tuned
-            // for different CPU feature sets (dotprod, i8mm, hexagon, opencl),
-            // plus a duplicate pair for x86_64. Per architecture that is ~74 MB
-            // of overlapping .so files. Keeping only the generic baseline pair
-            // (librnllama.so + librnllama_jni.so) drops that to ~10 MB; the
-            // baseline runs on every device and llama.cpp's own loader falls
-            // back to it automatically. This is on top of, not instead of,
-            // restricting `reactNativeArchitectures` in gradle.properties to
-            // the one architecture a real phone actually needs.
-            excludes += [
-                "**/librnllama_v8*.so",
-                "**/librnllama_jni_v8*.so",
-                "**/librnllama_x86_64.so",
-                "**/librnllama_jni_x86_64.so",
-            ]
         }
     }
     androidResources {
@@ -217,7 +202,4 @@ dependencies {
     } else {
         implementation jscFlavor
     }
-
-    // Offline speech recognition, works on every phone without Google services
-    implementation("com.alphacephei:vosk-android:0.3.47")
 }

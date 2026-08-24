@@ -105,13 +105,12 @@ function reconcileLibrary(entries: Entry[], categories: Category[]): { entries: 
 }
 
 function applyPatch(entry: Entry, patch: EntryPatch): Entry {
-  const { title, categoryId, dueAt, remindAt, archivedAt, ...rest } = patch;
+  const { title, categoryId, remindAt, archivedAt, ...rest } = patch;
   return {
     ...entry,
     ...rest,
     title: title === undefined ? entry.title : title?.trim() || undefined,
     categoryId: categoryId === undefined ? entry.categoryId : categoryId ?? undefined,
-    dueAt: dueAt === undefined ? entry.dueAt : dueAt ?? undefined,
     remindAt: remindAt === undefined ? entry.remindAt : remindAt ?? undefined,
     archivedAt: archivedAt === undefined ? entry.archivedAt : archivedAt ?? undefined,
     updatedAt: Date.now(),
@@ -389,8 +388,6 @@ export function EntriesProvider({ children }: { children: ReactNode }) {
         ? input.categoryId
         : undefined,
       timesRediscovered: 0,
-      kind: input.kind && input.kind !== 'idea' ? input.kind : undefined,
-      dueAt: input.dueAt,
     };
     dispatch({ type: 'add', entry });
     return entry;

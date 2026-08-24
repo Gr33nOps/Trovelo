@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import type { Entry } from '../src/types';
+import { fixGrammarAndStyle } from '../src/utils/grammar';
 import { pickSurprise } from '../src/utils/random';
 import { searchEntries } from '../src/utils/search';
 import { matchKnownTags, normalizeTag, parseTags } from '../src/utils/tags';
@@ -31,10 +32,9 @@ test('search indexes non-ASCII words instead of treating the query as empty', ()
   assert.deepEqual(searchEntries(entries, 'سفر').map(({ id }) => id), ['urdu']);
 });
 
-test('dismissed, task, and archived entries never resurface', () => {
+test('dismissed and archived entries never resurface', () => {
   const hidden = [
     entry('dismissed', { status: 'not_useful' }),
-    entry('task', { kind: 'task' }),
     entry('archived', { archivedAt: Date.now() }),
   ];
 
@@ -60,4 +60,14 @@ test('known-tag matching uses Unicode-aware word boundaries', () => {
 test('tag parsing normalizes, deduplicates, and strips hash prefixes', () => {
   assert.deepEqual(parseTags(' #Books, books;  Travel\nTRAVEL '), ['books', 'travel']);
   assert.equal(normalizeTag('  #A   Long   Tag  '), 'a long tag');
+});
+
+test('grammar fix normalizes spacing, expands contractions, and capitalizes sentences', () => {
+  assert.equal(fixGrammarAndStyle('i dont know.this is bad'), "I don't know. This is bad");
+  assert.equal(fixGrammarAndStyle('  hello   world  '), 'Hello world');
+  assert.equal(fixGrammarAndStyle('wait !!! really ???'), 'Wait! Really?');
+});
+
+test('grammar fix leaves decimals, thousands separators, and times alone', () => {
+  assert.equal(fixGrammarAndStyle('it costs 3.14 and there are 1,000 of them at 3:30'), 'It costs 3.14 and there are 1,000 of them at 3:30');
 });
