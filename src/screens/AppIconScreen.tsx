@@ -27,7 +27,7 @@ function optionOpacity(disabled: boolean, selected: boolean, pressed: boolean): 
 
 export default function AppIconScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
-  const { palette } = useTheme();
+  const { palette, accentId: liveAccentId, isDark: liveIsDark, appIconMode, setAppIconMode } = useTheme();
   const haptics = useHaptics();
   const toast = useToast();
 
@@ -48,10 +48,31 @@ export default function AppIconScreen({ navigation }: Props) {
     if (busy) return;
     setBusy(true);
     try {
+      setAppIconMode('manual');
       await setAppIcon(accentId, isDark);
       refresh();
       haptics.success();
       toast.show({ message: 'App icon changed. Check your home screen.', tone: 'success' });
+    } catch (error) {
+      haptics.warning();
+      toast.show({
+        message: error instanceof Error ? error.message : 'The app icon could not be changed.',
+        tone: 'warning',
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const chooseAuto = async () => {
+    if (busy || appIconMode === 'auto') return;
+    setBusy(true);
+    try {
+      setAppIconMode('auto');
+      await setAppIcon(liveAccentId, liveIsDark);
+      refresh();
+      haptics.success();
+      toast.show({ message: 'App icon will now match your theme.', tone: 'success' });
     } catch (error) {
       haptics.warning();
       toast.show({
@@ -78,7 +99,7 @@ export default function AppIconScreen({ navigation }: Props) {
     );
   }
 
-  const selected = current ? accentForIconName(current) : null;
+  const selected = current && appIconMode === 'manual' ? accentForIconName(current) : null;
 
   return (
     <Backdrop>
@@ -91,10 +112,35 @@ export default function AppIconScreen({ navigation }: Props) {
         <Panel style={styles.intro} borderRadius={radii.lg}>
           <Ionicons name="information-circle-outline" size={18} color={palette.inkFaint} />
           <Type role="caption" style={styles.introText}>
-            Pick which icon shows on your home screen. This changes the icon itself — it doesn&apos;t change the
-            accent colour used inside the app, though picking the same one keeps them matching.
+            Pick which icon shows on your home screen, or leave it matching your theme and accent colour
+            automatically.
           </Type>
         </Panel>
+
+        <Pressable
+          onPress={() => void chooseAuto()}
+          disabled={busy}
+          accessibilityRole="radio"
+          accessibilityState={{ selected: appIconMode === 'auto', disabled: busy }}
+          style={({ pressed }) => [
+            styles.autoRow,
+            {
+              borderRadius: radii.lg,
+              borderColor: appIconMode === 'auto' ? palette.accent : palette.edge,
+              backgroundColor: appIconMode === 'auto' ? withAlpha(palette.accent, 0.08) : palette.panel,
+              opacity: optionOpacity(busy, appIconMode === 'auto', pressed),
+            },
+          ]}
+        >
+          <AppMark size={44} />
+          <View style={styles.autoText}>
+            <Type role="bodyStrong">Match app appearance</Type>
+            <Type role="caption" color={palette.inkSoft}>
+              Follows your theme and accent colour automatically
+            </Type>
+          </View>
+          {appIconMode === 'auto' ? <Ionicons name="checkmark-circle" size={20} color={palette.accent} /> : null}
+        </Pressable>
 
         {ICON_ACCENT_ORDER.map((accentId) => {
           const def = ACCENT_COLORS.find((option) => option.id === accentId);
@@ -198,6 +244,17 @@ const styles = StyleSheet.create({
   introText: {
     flex: 1,
     lineHeight: 20,
+  },
+  autoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.md,
+    borderWidth: 1.5,
+  },
+  autoText: {
+    flex: 1,
+    gap: 2,
   },
   row: {
     gap: spacing.sm,

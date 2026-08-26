@@ -79,6 +79,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   bestStreak: 0,
   daysOpened: 0,
   onboarded: false,
+  appIconMode: 'auto',
 };
 
 /**
@@ -319,6 +320,7 @@ export async function loadPreferences(): Promise<Preferences> {
     bestStreak: Math.max(streak, number(prefs.bestStreak, 0)),
     daysOpened: number(prefs.daysOpened, 0),
     onboarded: prefs.onboarded === true,
+    appIconMode: prefs.appIconMode === 'manual' ? 'manual' : 'auto',
   };
 }
 

@@ -49,10 +49,41 @@ function TabLabel({ label, color, focused }: { readonly label: string; readonly 
   );
 }
 
+function TabButton({
+  tab,
+  focused,
+  onPress,
+}: {
+  readonly tab: TabDef;
+  readonly focused: boolean;
+  readonly onPress: () => void;
+}) {
+  const { palette } = useTheme();
+  const color = focused ? palette.ink : palette.inkSoft;
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ selected: focused }}
+      accessibilityLabel={tab.label}
+      style={styles.tabItem}
+    >
+      <Ionicons name={focused ? tab.focusedIcon : tab.unfocusedIcon} size={22} color={color} />
+      <TabLabel label={tab.label} color={color} focused={focused} />
+    </Pressable>
+  );
+}
+
 /**
- * A fully custom bar rather than a 4th `tabBarButton` slot: the compose
- * action floats above the row instead of sharing it, so it reads as a
- * distinct "add" affordance rather than a fourth, oversized destination.
+ * A fully custom bar: the compose action is a genuine 4th flex column (same
+ * width as every tab), just raised above the row on its own negative margin
+ * — not an absolutely-positioned overlay spanning the bar's full width. The
+ * previous version used `left: 0, right: 0`, which both centred it exactly
+ * on top of the Surprise tab (3 equal columns → dead centre is the middle
+ * one) and, being laid out last, intercepted taps meant for every tab
+ * beneath it. A normal flex column can't do either: it only ever occupies
+ * its own quarter of the bar, so it can't overlap a neighbour or steal its
+ * touches.
  */
 function TabBar({ state, navigation }: BottomTabBarProps) {
   const { palette } = useTheme();
@@ -60,6 +91,12 @@ function TabBar({ state, navigation }: BottomTabBarProps) {
   const haptics = useHaptics();
   const barHeight = 56 + Math.max(insets.bottom, spacing.sm);
   const activeName = state.routes[state.index].name;
+  const [libraryTab, homeTab, settingsTab] = VISIBLE_TABS;
+
+  const goTo = (name: TabDef['name']) => {
+    haptics.light();
+    navigation.navigate(name);
+  };
 
   return (
     <View
@@ -73,26 +110,8 @@ function TabBar({ state, navigation }: BottomTabBarProps) {
         },
       ]}
     >
-      {VISIBLE_TABS.map((tab) => {
-        const focused = activeName === tab.name;
-        const color = focused ? palette.ink : palette.inkSoft;
-        return (
-          <Pressable
-            key={tab.name}
-            onPress={() => {
-              haptics.light();
-              navigation.navigate(tab.name);
-            }}
-            accessibilityRole="button"
-            accessibilityState={{ selected: focused }}
-            accessibilityLabel={tab.label}
-            style={styles.tabItem}
-          >
-            <Ionicons name={focused ? tab.focusedIcon : tab.unfocusedIcon} size={22} color={color} />
-            <TabLabel label={tab.label} color={color} focused={focused} />
-          </Pressable>
-        );
-      })}
+      <TabButton tab={libraryTab} focused={activeName === libraryTab.name} onPress={() => goTo(libraryTab.name)} />
+      <TabButton tab={homeTab} focused={activeName === homeTab.name} onPress={() => goTo(homeTab.name)} />
 
       <Pressable
         onPress={() => {
@@ -101,8 +120,7 @@ function TabBar({ state, navigation }: BottomTabBarProps) {
         }}
         accessibilityRole="button"
         accessibilityLabel="Add a new idea"
-        hitSlop={8}
-        style={styles.fabWrap}
+        style={styles.fabSlot}
       >
         <View
           style={[
@@ -118,6 +136,8 @@ function TabBar({ state, navigation }: BottomTabBarProps) {
         </View>
         <TabLabel label="New idea" color={palette.inkSoft} focused={false} />
       </Pressable>
+
+      <TabButton tab={settingsTab} focused={activeName === settingsTab.name} onPress={() => goTo(settingsTab.name)} />
     </View>
   );
 }
@@ -159,16 +179,18 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bodySemibold,
     fontWeight: weights.semibold,
   },
-  fabWrap: {
-    position: 'absolute',
-    top: -(FAB_SIZE / 2),
-    left: 0,
-    right: 0,
+  fabSlot: {
+    flex: 1,
     alignItems: 'center',
+    justifyContent: 'flex-start',
   },
   fab: {
     width: FAB_SIZE,
     height: FAB_SIZE,
+    // Pulled up so the circle's net footprint below this point matches a
+    // plain 22px tab icon — the label that follows still needs to fit
+    // inside the bar's fixed height.
+    marginTop: -(FAB_SIZE - 22),
     alignItems: 'center',
     justifyContent: 'center',
     shadowOffset: { width: 0, height: 3 },

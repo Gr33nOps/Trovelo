@@ -7,6 +7,7 @@ export function isEntryStatus(value: unknown): value is EntryStatus {
 }
 
 export type ThemeMode = 'system' | 'light' | 'dark';
+export type AppIconMode = 'auto' | 'manual';
 
 /** Which accent hue the user picked. See `ACCENT_COLORS` for what each looks like. */
 export type AccentId = 'gold' | 'green' | 'blue' | 'purple' | 'teal' | 'rose';
@@ -95,6 +96,8 @@ export interface Preferences {
   daysOpened: number;
   /** False until the user finishes the welcome screen. */
   onboarded: boolean;
+  /** `auto` keeps the home-screen icon matching accent/theme; `manual` respects a picked icon until the user asks to match again. */
+  appIconMode: AppIconMode;
 }
 
 export type StatusFilter = EntryStatus | 'all' | 'favorites';

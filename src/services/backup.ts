@@ -280,6 +280,7 @@ function sanitizePreferences(raw: unknown): Preferences | undefined {
     bestStreak: Math.max(streak, num(p.bestStreak)),
     daysOpened: num(p.daysOpened),
     onboarded: p.onboarded === true,
+    appIconMode: p.appIconMode === 'manual' ? 'manual' : 'auto',
   };
 }
 

@@ -4,6 +4,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AppMark } from '../components/AppMark';
 import { EntryCard } from '../components/EntryCard';
 import { STATUS_FILTER_OPTIONS } from '../constants/status';
 import { HIT_SLOP, PAGE_PAD, Palette, radius as radii, fonts, fontSizes, spacing, withAlpha } from '../constants/theme';
@@ -105,12 +106,15 @@ function LibraryHeader({
       <View style={{ height: insetsTop }} />
 
       <View style={styles.brand}>
-        <Type role="display" accessibilityRole="header">
-          Trovelo
-        </Type>
-        <Type role="caption" color={palette.inkFaint}>
-          {keptCount} {keptCount === 1 ? 'idea' : 'ideas'} saved
-        </Type>
+        <AppMark size={40} />
+        <View style={styles.brandText}>
+          <Type role="display" accessibilityRole="header">
+            Trovelo
+          </Type>
+          <Type role="caption" color={palette.inkFaint}>
+            {keptCount} {keptCount === 1 ? 'idea' : 'ideas'} saved
+          </Type>
+        </View>
       </View>
 
       <Well style={styles.search} borderRadius={radii.md}>
@@ -472,8 +476,14 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.md,
   },
   brand: {
-    gap: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
     paddingTop: spacing.xl,
+  },
+  brandText: {
+    flex: 1,
+    gap: 6,
   },
   search: {
     flexDirection: 'row',

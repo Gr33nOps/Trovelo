@@ -18,13 +18,14 @@ import {
   radius,
   spacing,
 } from '../constants/theme';
+import { setAppIcon } from '../services/appIcon';
 import {
   DEFAULT_PREFERENCES,
   clearStoredPreferences,
   loadPreferences,
   savePreferences,
 } from '../storage/storage';
-import { AccentId, Preferences, ThemeMode } from '../types';
+import { AccentId, AppIconMode, Preferences, ThemeMode } from '../types';
 import { todayKey, yesterdayKey } from '../utils/date';
 
 export interface Theme {
@@ -40,10 +41,13 @@ export interface Theme {
   bestStreak: number;
   daysOpened: number;
   onboarded: boolean;
+  /** `auto` keeps the home-screen icon matching accent/theme; `manual` leaves a picked icon alone. */
+  appIconMode: AppIconMode;
   /** True once preferences have been read from disk. */
   ready: boolean;
   setMode: (mode: ThemeMode) => void;
   setAccentId: (accentId: AccentId) => void;
+  setAppIconMode: (mode: AppIconMode) => void;
   completeOnboarding: () => void;
   registerAppOpen: () => void;
   /** Clears preferences on disk and restores the provider's in-memory defaults. */
@@ -112,6 +116,11 @@ export function ThemeProvider({ children }: { readonly children: ReactNode }) {
     [commit],
   );
 
+  const setAppIconMode = useCallback(
+    (appIconMode: AppIconMode) => commit((current) => ({ ...current, appIconMode })),
+    [commit],
+  );
+
   const completeOnboarding = useCallback(
     () => commit((current) => ({ ...current, onboarded: true })),
     [commit],
@@ -144,6 +153,20 @@ export function ThemeProvider({ children }: { readonly children: ReactNode }) {
   const isDark = prefs.themeMode === 'system' ? systemScheme === 'dark' : prefs.themeMode === 'dark';
   const palette = buildPalette(isDark ? 'dark' : 'light', prefs.accentId);
 
+  /**
+   * Keeps the home-screen launcher icon matching the in-app accent/theme.
+   * Gated on `ready` so this never fires with the in-memory defaults before
+   * the real stored preferences have loaded (which would flash the icon to
+   * gold/dark and back). Skipped entirely in `manual` mode, where a picked
+   * icon should stay put until the user asks to match again.
+   */
+  useEffect(() => {
+    if (!ready || prefs.appIconMode !== 'auto') return;
+    void setAppIcon(prefs.accentId, isDark).catch((error) => {
+      if (__DEV__) console.warn('[theme] failed to sync app icon', error);
+    });
+  }, [ready, prefs.appIconMode, prefs.accentId, isDark]);
+
   const value = useMemo<Theme>(
     () => ({
       isDark,
@@ -158,9 +181,11 @@ export function ThemeProvider({ children }: { readonly children: ReactNode }) {
       bestStreak: prefs.bestStreak,
       daysOpened: prefs.daysOpened,
       onboarded: prefs.onboarded,
+      appIconMode: prefs.appIconMode,
       ready,
       setMode,
       setAccentId,
+      setAppIconMode,
       completeOnboarding,
       registerAppOpen,
       resetPreferences,
@@ -174,9 +199,11 @@ export function ThemeProvider({ children }: { readonly children: ReactNode }) {
       prefs.bestStreak,
       prefs.daysOpened,
       prefs.onboarded,
+      prefs.appIconMode,
       ready,
       setMode,
       setAccentId,
+      setAppIconMode,
       completeOnboarding,
       registerAppOpen,
       resetPreferences,
