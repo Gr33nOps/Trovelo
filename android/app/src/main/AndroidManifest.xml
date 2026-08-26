@@ -7,11 +7,87 @@
     <meta-data android:name="expo.modules.updates.ENABLE_BSDIFF_PATCH_SUPPORT" android:value="true"/>
     <meta-data android:name="expo.modules.updates.EXPO_UPDATES_CHECK_ON_LAUNCH" android:value="ALWAYS"/>
     <meta-data android:name="expo.modules.updates.EXPO_UPDATES_LAUNCH_WAIT_MS" android:value="0"/>
-    <activity android:name=".MainActivity" android:label="@string/app_name" android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode|smallestScreenSize|assetsPaths" android:launchMode="singleTask" android:windowSoftInputMode="adjustResize" android:theme="@style/Theme.App.SplashScreen" android:exported="true" android:screenOrientation="portrait">
+    <activity android:name=".MainActivity" android:label="@string/app_name" android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode|smallestScreenSize|assetsPaths" android:launchMode="singleTask" android:windowSoftInputMode="adjustResize" android:theme="@style/Theme.App.SplashScreen" android:exported="false" android:screenOrientation="portrait"/>
+
+    <!--
+      The launcher icon lives on these aliases instead of MainActivity itself,
+      so AppIconModule can swap which one is enabled (exactly one at a time)
+      to change the home-screen icon without touching app data. Gold/Dark is
+      the one enabled by default, matching the app's own default accent and
+      the primary @mipmap/ic_launcher used everywhere else (Settings > Apps,
+      permission dialogs, etc).
+    -->
+    <activity-alias android:name=".IconGoldDark" android:enabled="true" android:exported="true" android:icon="@mipmap/ic_launcher_gold_dark" android:roundIcon="@mipmap/ic_launcher_gold_dark" android:targetActivity=".MainActivity">
       <intent-filter>
         <action android:name="android.intent.action.MAIN"/>
         <category android:name="android.intent.category.LAUNCHER"/>
       </intent-filter>
-    </activity>
+    </activity-alias>
+    <activity-alias android:name=".IconGoldLight" android:enabled="false" android:exported="true" android:icon="@mipmap/ic_launcher_gold_light" android:roundIcon="@mipmap/ic_launcher_gold_light" android:targetActivity=".MainActivity">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
+      </intent-filter>
+    </activity-alias>
+    <activity-alias android:name=".IconGreenDark" android:enabled="false" android:exported="true" android:icon="@mipmap/ic_launcher_green_dark" android:roundIcon="@mipmap/ic_launcher_green_dark" android:targetActivity=".MainActivity">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
+      </intent-filter>
+    </activity-alias>
+    <activity-alias android:name=".IconGreenLight" android:enabled="false" android:exported="true" android:icon="@mipmap/ic_launcher_green_light" android:roundIcon="@mipmap/ic_launcher_green_light" android:targetActivity=".MainActivity">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
+      </intent-filter>
+    </activity-alias>
+    <activity-alias android:name=".IconBlueDark" android:enabled="false" android:exported="true" android:icon="@mipmap/ic_launcher_blue_dark" android:roundIcon="@mipmap/ic_launcher_blue_dark" android:targetActivity=".MainActivity">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
+      </intent-filter>
+    </activity-alias>
+    <activity-alias android:name=".IconBlueLight" android:enabled="false" android:exported="true" android:icon="@mipmap/ic_launcher_blue_light" android:roundIcon="@mipmap/ic_launcher_blue_light" android:targetActivity=".MainActivity">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
+      </intent-filter>
+    </activity-alias>
+    <activity-alias android:name=".IconPurpleDark" android:enabled="false" android:exported="true" android:icon="@mipmap/ic_launcher_purple_dark" android:roundIcon="@mipmap/ic_launcher_purple_dark" android:targetActivity=".MainActivity">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
+      </intent-filter>
+    </activity-alias>
+    <activity-alias android:name=".IconPurpleLight" android:enabled="false" android:exported="true" android:icon="@mipmap/ic_launcher_purple_light" android:roundIcon="@mipmap/ic_launcher_purple_light" android:targetActivity=".MainActivity">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
+      </intent-filter>
+    </activity-alias>
+    <activity-alias android:name=".IconTealDark" android:enabled="false" android:exported="true" android:icon="@mipmap/ic_launcher_teal_dark" android:roundIcon="@mipmap/ic_launcher_teal_dark" android:targetActivity=".MainActivity">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
+      </intent-filter>
+    </activity-alias>
+    <activity-alias android:name=".IconTealLight" android:enabled="false" android:exported="true" android:icon="@mipmap/ic_launcher_teal_light" android:roundIcon="@mipmap/ic_launcher_teal_light" android:targetActivity=".MainActivity">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
+      </intent-filter>
+    </activity-alias>
+    <activity-alias android:name=".IconRoseDark" android:enabled="false" android:exported="true" android:icon="@mipmap/ic_launcher_rose_dark" android:roundIcon="@mipmap/ic_launcher_rose_dark" android:targetActivity=".MainActivity">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
+      </intent-filter>
+    </activity-alias>
+    <activity-alias android:name=".IconRoseLight" android:enabled="false" android:exported="true" android:icon="@mipmap/ic_launcher_rose_light" android:roundIcon="@mipmap/ic_launcher_rose_light" android:targetActivity=".MainActivity">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
+      </intent-filter>
+    </activity-alias>
   </application>
 </manifest>

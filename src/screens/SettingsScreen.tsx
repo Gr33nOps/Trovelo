@@ -3,6 +3,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-na
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 
+import { AppMark } from '../components/AppMark';
 import { ACCENT_COLORS, PAGE_PAD, contrastingInk, spacing } from '../constants/theme';
 import { useEntries } from '../context/EntriesContext';
 import { useSettings } from '../context/SettingsContext';
@@ -141,7 +142,7 @@ export default function SettingsScreen({ navigation }: Props) {
         keyboardShouldPersistTaps="handled"
       >
         <View>
-          <SectionHeader title="Appearance" hint="One accent colour, used for every icon and highlight in the app." />
+          <SectionHeader title="Appearance" />
           <Segmented
             options={THEME_OPTIONS}
             value={mode}
@@ -177,6 +178,12 @@ export default function SettingsScreen({ navigation }: Props) {
               );
             })}
           </View>
+          <Type role="caption" color={palette.inkFaint} align="center" style={styles.accentName}>
+            {ACCENT_COLORS.find((option) => option.id === accentId)?.label}
+          </Type>
+          <Group style={styles.appIconRow}>
+            <Row title="App icon" subtitle="Change the home-screen icon to match." onPress={() => navigation.navigate('AppIcon')} />
+          </Group>
         </View>
 
         <View>
@@ -199,15 +206,12 @@ export default function SettingsScreen({ navigation }: Props) {
         </View>
 
         <View>
-          <SectionHeader
-            title="Folders"
-            hint="Optional grouping. Deleting a folder never deletes the entries inside it."
-          />
+          <SectionHeader title="Folders" hint="Deleting a folder keeps what's inside it." />
           <Group>
             {categories.length === 0 ? (
               <Row
                 title="No folders yet"
-                subtitle="Most people never need one. Search and tags usually do the job."
+                subtitle="Search and tags usually do the job."
                 chevron={false}
               />
             ) : (
@@ -285,23 +289,15 @@ export default function SettingsScreen({ navigation }: Props) {
         </View>
 
         <View>
-          <SectionHeader title="Working through your box" />
+          <SectionHeader title="Workflow" />
           <Group>
-            <Row
-              title="Stats"
-              subtitle="Streaks, counts and what you have rediscovered."
-              onPress={() => navigation.navigate('Stats')}
-            />
+            <Row title="Stats" subtitle="Streaks, counts and rediscoveries." onPress={() => navigation.navigate('Stats')} />
             <Row
               title="Weekly review"
-              subtitle="Work through a few things you have not seen in a while."
+              subtitle="A few ideas you haven't seen in a while."
               onPress={() => navigation.navigate('Review')}
             />
-            <Row
-              title="Tidy up"
-              subtitle="Add tags to entries that do not have any yet."
-              onPress={() => navigation.navigate('Tidy')}
-            />
+            <Row title="Tidy up" subtitle="Tag entries that don't have any yet." onPress={() => navigation.navigate('Tidy')} />
           </Group>
         </View>
 
@@ -309,15 +305,16 @@ export default function SettingsScreen({ navigation }: Props) {
           <SectionHeader title="Data" />
           <Group>
             <Row
-              title="Export as encrypted JSON"
-              subtitle="Save a copy, or move your entries to another phone."
+              title="Backup & restore"
+              subtitle="Encrypted local backups. Restore merges, never overwrites."
               onPress={() => navigation.navigate('Backup')}
             />
-            <Row
-              title="Backup and restore"
-              subtitle="Backups use AES-256-CBC + HMAC-SHA256. Restore merges, never overwrites."
-              onPress={() => navigation.navigate('Backup')}
-            />
+          </Group>
+        </View>
+
+        <View>
+          <SectionHeader title="Danger zone" />
+          <Group>
             <Row
               title="Delete everything"
               subtitle={`${entries.length} ${entries.length === 1 ? 'entry' : 'entries'} on this phone`}
@@ -330,6 +327,7 @@ export default function SettingsScreen({ navigation }: Props) {
         </View>
 
         <View style={styles.about}>
+          <AppMark size={48} />
           <Type role="caption" style={styles.aboutText}>
             Trovelo has no account, telemetry, or server, and makes no network requests. Everything you write
             stays on this phone.
@@ -363,6 +361,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 2,
   },
+  accentName: {
+    marginTop: spacing.sm,
+  },
+  appIconRow: {
+    marginTop: spacing.lg,
+  },
   folderEdit: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -384,9 +388,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   about: {
+    alignItems: 'center',
+    gap: spacing.md,
     paddingVertical: spacing.md,
   },
   aboutText: {
     lineHeight: 22,
+    textAlign: 'center',
   },
 });

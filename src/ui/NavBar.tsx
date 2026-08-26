@@ -185,10 +185,10 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'space-between',
     paddingHorizontal: PAGE_PAD,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
     gap: spacing.md,
-    minHeight: 64,
+    minHeight: 52,
   },
   pageHeaderText: {
     flex: 1,

@@ -54,7 +54,17 @@ interface Skin {
   bordered: boolean;
 }
 
-function skinFor(variant: ButtonVariant, palette: Palette, tint?: string): Skin {
+/**
+ * Accent is reserved for two things: a filled `primary` button (the one
+ * action on the screen) and an `outline` button (a highlighted secondary
+ * action, e.g. Surprise Me). Every other variant — including a disabled
+ * button of any variant — stays neutral, so the accent colour never has to
+ * compete with itself for the user's attention.
+ */
+function skinFor(variant: ButtonVariant, palette: Palette, disabled: boolean, tint?: string): Skin {
+  if (disabled) {
+    return { fill: palette.well, ink: palette.inkFaint, border: palette.edge, bordered: true };
+  }
   if (tint) {
     return { fill: tint, ink: contrastingInk(tint), border: tint, bordered: true };
   }
@@ -68,7 +78,7 @@ function skinFor(variant: ButtonVariant, palette: Palette, tint?: string): Skin 
     case 'outline':
       return { fill: 'transparent', ink: palette.accent, border: palette.accent, bordered: true };
     case 'plain':
-      return { fill: 'transparent', ink: palette.accent, border: 'transparent', bordered: false };
+      return { fill: 'transparent', ink: palette.inkSoft, border: 'transparent', bordered: false };
   }
 }
 
@@ -94,7 +104,7 @@ export function Button({
   const haptics = useHaptics();
   const travel = useRef(new Animated.Value(0)).current;
   const inert = disabled || loading;
-  const skin = skinFor(variant, palette, disabled ? undefined : tint);
+  const skin = skinFor(variant, palette, disabled, tint);
   const height = HEIGHTS[size];
 
   const animate = useCallback(
@@ -141,8 +151,8 @@ export function Button({
             borderRadius: radii.sm,
             backgroundColor: skin.fill,
             borderWidth: skin.bordered ? 1.5 : 0,
-            borderColor: disabled ? palette.edge : skin.border,
-            opacity: disabled ? 0.45 : 1,
+            borderColor: skin.border,
+            opacity: disabled ? 0.6 : 1,
             minWidth: size === 'sm' ? undefined : MIN_TOUCH,
           },
         ]}

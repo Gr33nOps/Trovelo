@@ -2,9 +2,9 @@ import React, { Children, Fragment, ReactNode, isValidElement } from 'react';
 import { Pressable, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
-import { MIN_TOUCH, spacing } from '../constants/theme';
+import { MIN_TOUCH, radius as radii, spacing } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
-import { Rule } from './Surface';
+import { Panel, Rule } from './Surface';
 import { Type } from './Type';
 
 export function SectionHeader({
@@ -35,7 +35,7 @@ export function SectionHeader({
   );
 }
 
-/** Flat grouped list — hairlines only, no card chrome. */
+/** A bordered card of rows, hairlines between them — gives each settings section a clear boundary. */
 export function Group({
   children,
   style,
@@ -46,14 +46,14 @@ export function Group({
 }) {
   const items = Children.toArray(children).filter(isValidElement);
   return (
-    <View style={style}>
+    <Panel style={[styles.group, style]} borderRadius={radii.lg}>
       {items.map((child, index) => (
         <Fragment key={child.key ?? index}>
           {index > 0 ? <Rule /> : null}
           {child}
         </Fragment>
       ))}
-    </View>
+    </Panel>
   );
 }
 
@@ -147,6 +147,9 @@ export function Row({
 }
 
 const styles = StyleSheet.create({
+  group: {
+    paddingHorizontal: spacing.lg,
+  },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'flex-end',

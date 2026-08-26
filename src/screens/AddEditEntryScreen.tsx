@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -23,6 +23,8 @@ type Props = NativeStackScreenProps<RootStackParamList, 'EntryEdit'>;
 
 const MAX_TEXT_LENGTH = 4000;
 const MAX_TITLE_LENGTH = 90;
+/** The counter only earns its place on screen once the limit is actually close. */
+const COUNTER_THRESHOLD = 3500;
 
 export default function AddEditEntryScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
@@ -40,6 +42,9 @@ export default function AddEditEntryScreen({ navigation, route }: Props) {
   const [categoryId, setCategoryId] = useState<string | undefined>(existing?.categoryId);
   const [newFolder, setNewFolder] = useState('');
   const [showNewFolder, setShowNewFolder] = useState(false);
+  // Tags and a folder are for later organising, not for capturing the thought
+  // itself, so they stay tucked away until asked for.
+  const [detailsOpen, setDetailsOpen] = useState(tags.length > 0 || !!categoryId);
 
   const saved = useRef(false);
 
@@ -90,7 +95,6 @@ export default function AddEditEntryScreen({ navigation, route }: Props) {
         tags,
         categoryId: categoryId ?? null,
       });
-      toast.show({ message: 'Saved.', tone: 'success' });
     } else {
       addEntry({
         title: title.trim() || undefined,
@@ -99,9 +103,9 @@ export default function AddEditEntryScreen({ navigation, route }: Props) {
         status: 'new',
         categoryId,
       });
-      toast.show({ message: 'Added to your box.', tone: 'success' });
     }
     haptics.success();
+    toast.show({ message: 'Saved.', tone: 'success' });
     navigation.goBack();
   };
 
@@ -135,6 +139,8 @@ export default function AddEditEntryScreen({ navigation, route }: Props) {
       });
     }
   };
+
+  const folderLabel = categoryId ? categories.find((c) => c.id === categoryId)?.name ?? 'None' : 'None';
 
   return (
     <Backdrop>
@@ -175,82 +181,94 @@ export default function AddEditEntryScreen({ navigation, route }: Props) {
             placeholder="A half-formed thought, a what-if, a thing worth trying..."
             multiline
             maxLength={MAX_TEXT_LENGTH}
-            showCounter
+            showCounter={text.length > COUNTER_THRESHOLD}
             variant="plain"
             inputStyle={styles.textArea}
             containerStyle={styles.bodyField}
           />
 
           <Button
-            label="Fix grammar & style"
+            label="Polish"
             onPress={fixGrammar}
-            variant="secondary"
+            variant="plain"
             size="sm"
             disabled={!canSave}
-            icon={<Ionicons name="sparkles-outline" size={14} color={palette.ink} />}
-            style={styles.fixButton}
+            icon={<Ionicons name="sparkles-outline" size={14} color={palette.inkSoft} />}
+            style={styles.polishButton}
           />
 
-          <View style={styles.detailBlock}>
+          <Pressable onPress={() => setDetailsOpen((open) => !open)} style={styles.detailsToggle}>
             <Type role="label" pressed>
-              Tags
+              {detailsOpen ? 'Hide details' : 'Add details'}
             </Type>
-            <TagInput value={tags} onChange={setTags} suggestions={knownTags.map((item) => item.tag)} />
-          </View>
-
-          <View style={styles.detailBlock}>
-            <Type role="label" pressed>
-              Folder
-            </Type>
-            <View style={styles.chipRow}>
-              <Chip label="None" active={!categoryId} onPress={() => setCategoryId(undefined)} />
-              {categories.map((category) => (
-                <Chip
-                  key={category.id}
-                  label={category.name}
-                  active={categoryId === category.id}
-                  onPress={() => setCategoryId(category.id)}
-                />
-              ))}
-              <Chip
-                label={showNewFolder ? 'Cancel' : 'New folder'}
-                active={false}
-                onPress={() => setShowNewFolder((open) => !open)}
-              />
-            </View>
-
-            {showNewFolder ? (
-              <View style={styles.newFolderRow}>
-                <Field
-                  value={newFolder}
-                  onChangeText={setNewFolder}
-                  placeholder="Folder name"
-                  maxLength={40}
-                  returnKeyType="done"
-                  onSubmitEditing={createFolder}
-                  containerStyle={styles.grow}
-                  accessibilityLabel="New folder name"
-                />
-                <Button
-                  label="Create"
-                  size="md"
-                  variant="primary"
-                  disabled={newFolder.trim().length === 0}
-                  onPress={createFolder}
-                />
-              </View>
+            <Ionicons
+              name={detailsOpen ? 'chevron-up' : 'chevron-down'}
+              size={14}
+              color={palette.inkFaint}
+            />
+            {!detailsOpen && (tags.length > 0 || categoryId) ? (
+              <Type role="caption" color={palette.inkFaint}>
+                {[tags.length > 0 ? `${tags.length} ${tags.length === 1 ? 'tag' : 'tags'}` : null, categoryId ? folderLabel : null]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </Type>
             ) : null}
-          </View>
+          </Pressable>
 
-          <Button
-            label={existing ? 'Save changes' : 'Put it in the box'}
-            onPress={handleSave}
-            disabled={!canSave}
-            variant="primary"
-            size="lg"
-            fullWidth
-            haptic="medium"
-          />
+          {detailsOpen ? (
+            <>
+              <View style={styles.detailBlock}>
+                <Type role="label" pressed>
+                  Tags
+                </Type>
+                <TagInput value={tags} onChange={setTags} suggestions={knownTags.map((item) => item.tag)} />
+              </View>
+
+              <View style={styles.detailBlock}>
+                <Type role="label" pressed>
+                  Folder
+                </Type>
+                <View style={styles.chipRow}>
+                  <Chip label="None" active={!categoryId} onPress={() => setCategoryId(undefined)} />
+                  {categories.map((category) => (
+                    <Chip
+                      key={category.id}
+                      label={category.name}
+                      active={categoryId === category.id}
+                      onPress={() => setCategoryId(category.id)}
+                    />
+                  ))}
+                  <Chip
+                    label={showNewFolder ? 'Cancel' : 'New folder'}
+                    active={false}
+                    onPress={() => setShowNewFolder((open) => !open)}
+                  />
+                </View>
+
+                {showNewFolder ? (
+                  <View style={styles.newFolderRow}>
+                    <Field
+                      value={newFolder}
+                      onChangeText={setNewFolder}
+                      placeholder="Folder name"
+                      maxLength={40}
+                      returnKeyType="done"
+                      onSubmitEditing={createFolder}
+                      containerStyle={styles.grow}
+                      accessibilityLabel="New folder name"
+                    />
+                    <Button
+                      label="Create"
+                      size="md"
+                      variant="primary"
+                      disabled={newFolder.trim().length === 0}
+                      onPress={createFolder}
+                    />
+                  </View>
+                ) : null}
+              </View>
+            </>
+          ) : null}
         </ScrollView>
       </KeyboardAvoidingView>
     </Backdrop>
@@ -264,7 +282,7 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: PAGE_PAD,
     paddingTop: spacing.md,
-    gap: spacing.xl,
+    gap: spacing.lg,
   },
   titleField: {
     marginTop: spacing.sm,
@@ -272,17 +290,24 @@ const styles = StyleSheet.create({
   bodyField: {
     marginTop: -spacing.md,
   },
-  detailBlock: {
-    gap: spacing.sm,
-  },
   textArea: {
-    minHeight: 240,
+    minHeight: 340,
     fontSize: 19,
     lineHeight: 30,
     paddingHorizontal: 0,
   },
-  fixButton: {
+  polishButton: {
     alignSelf: 'flex-start',
+    marginTop: -spacing.sm,
+  },
+  detailsToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+  },
+  detailBlock: {
+    gap: spacing.sm,
   },
   chipRow: {
     flexDirection: 'row',

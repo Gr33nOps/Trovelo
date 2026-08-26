@@ -6,6 +6,7 @@ import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 
 import { useTheme } from '../context/ThemeContext';
 import AddEditEntryScreen from '../screens/AddEditEntryScreen';
+import AppIconScreen from '../screens/AppIconScreen';
 import BackupScreen from '../screens/BackupScreen';
 import EntryDetailScreen from '../screens/EntryDetailScreen';
 import OnboardingScreen from '../screens/OnboardingScreen';
@@ -23,6 +24,7 @@ export type RootStackParamList = {
   Backup: undefined;
   Review: undefined;
   Tidy: undefined;
+  AppIcon: undefined;
 };
 
 /**
@@ -68,6 +70,7 @@ export function RootNavigator() {
       <Stack.Screen name="Backup" component={BackupScreen} />
       <Stack.Screen name="Review" component={ReviewScreen} />
       <Stack.Screen name="Tidy" component={TidyScreen} />
+      <Stack.Screen name="AppIcon" component={AppIconScreen} />
     </Stack.Navigator>
   );
 }

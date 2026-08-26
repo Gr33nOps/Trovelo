@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
+import { AppMark } from '../components/AppMark';
 import { PAGE_PAD, spacing, withAlpha } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { RootStackParamList } from '../navigation';
@@ -15,7 +16,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Onboarding'>;
 const PAGES = [
   {
     title: 'A simple box for ideas',
-    body: 'Drop in the things you would otherwise forget, one at a time.',
+    body: 'Drop in the ideas you would otherwise forget, one at a time.',
   },
   {
     title: 'Rediscover what you saved',
@@ -56,6 +57,10 @@ export default function OnboardingScreen({ navigation }: Props) {
   return (
     <Backdrop>
       <View style={[styles.root, { paddingTop: insets.top + spacing.xxl }]}>
+        <View style={styles.mark}>
+          <AppMark size={64} />
+        </View>
+
         <ScrollView
           ref={scroller}
           horizontal
@@ -116,6 +121,9 @@ export default function OnboardingScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+  },
+  mark: {
+    paddingHorizontal: PAGE_PAD,
   },
   pager: {
     flex: 1,

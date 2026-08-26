@@ -6,6 +6,11 @@ export function formatDate(ts: number): string {
   });
 }
 
+/** Compact absolute date, no year, for pairing with a relative stamp: "Aug 10". */
+export function formatShortDate(ts: number): string {
+  return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
 export function formatFullDate(date: Date): string {
   return date.toLocaleDateString(undefined, {
     weekday: 'long',

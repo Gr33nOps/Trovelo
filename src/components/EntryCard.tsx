@@ -5,7 +5,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { spacing } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { Entry } from '../types';
-import { formatShortRelative } from '../utils/date';
+import { formatShortDate, formatShortRelative } from '../utils/date';
 import { Type } from '../ui/Type';
 
 interface Props {
@@ -40,7 +40,7 @@ export const EntryCard = memo(
             {entry.isFavorite ? <Ionicons name="star" size={13} color={palette.accent} /> : null}
           </View>
           <Type role="caption" color={palette.inkFaint}>
-            {formatShortRelative(entry.createdAt)}
+            {formatShortDate(entry.createdAt)} · {formatShortRelative(entry.createdAt)}
           </Type>
         </View>
 

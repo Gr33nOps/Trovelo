@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EntryCard } from '../components/EntryCard';
 import { STATUS_FILTER_OPTIONS } from '../constants/status';
-import { HIT_SLOP, PAGE_PAD, fonts, fontSizes, spacing } from '../constants/theme';
+import { HIT_SLOP, PAGE_PAD, radius as radii, fonts, fontSizes, spacing, withAlpha } from '../constants/theme';
 import { useEntries } from '../context/EntriesContext';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
@@ -18,7 +18,7 @@ import { ActionSheet } from '../ui/ActionSheet';
 import { Button } from '../ui/Button';
 import { Chip, IconButton } from '../ui/Controls';
 import { EmptyState } from '../ui/EmptyState';
-import { Backdrop, Rule } from '../ui/Surface';
+import { Backdrop, Rule, Well } from '../ui/Surface';
 import { Type } from '../ui/Type';
 import { searchEntries } from '../utils/search';
 import { displayTag } from '../utils/tags';
@@ -161,32 +161,33 @@ export default function LibraryScreen({ navigation, route }: Props) {
     <View style={styles.header}>
       <View style={{ height: insets.top }} />
 
-      <View style={styles.brand}>
-        <Type role="display" accessibilityRole="header">
-          Trovelo
-        </Type>
-        <Type role="caption" color={palette.inkFaint}>
-          {keptCount} {keptCount === 1 ? 'thing' : 'things'} kept
-        </Type>
+      <View style={styles.brandRow}>
+        <View style={styles.brand}>
+          <Type role="display" accessibilityRole="header">
+            Trovelo
+          </Type>
+          <Type role="caption" color={palette.inkFaint}>
+            {keptCount} {keptCount === 1 ? 'idea' : 'ideas'} saved
+          </Type>
+        </View>
+        <Button
+          label="Surprise"
+          onPress={() => {
+            haptics.medium();
+            navigation.navigate('Home');
+          }}
+          variant="secondary"
+          size="sm"
+          icon={<Ionicons name="shuffle-outline" size={15} color={palette.ink} />}
+        />
       </View>
 
-      <Button
-        label="SURPRISE ME"
-        onPress={() => {
-          haptics.medium();
-          navigation.navigate('Home');
-        }}
-        variant="outline"
-        size="lg"
-        fullWidth
-        haptic="medium"
-      />
-
-      <View style={[styles.search, { borderBottomColor: palette.edge }]}>
+      <Well style={styles.search} borderRadius={radii.md}>
+        <Ionicons name="search-outline" size={17} color={palette.inkFaint} />
         <TextInput
           value={query}
           onChangeText={setQuery}
-          placeholder="Search"
+          placeholder="Search your ideas"
           placeholderTextColor={palette.inkFaint}
           returnKeyType="search"
           autoCorrect={false}
@@ -195,8 +196,8 @@ export default function LibraryScreen({ navigation, route }: Props) {
           cursorColor={palette.accent}
           style={[styles.searchInput, { color: palette.ink, fontFamily: fonts.body, fontSize: fontSizes.md }]}
         />
-        {query ? <IconButton icon="close-circle" label="Clear" size={20} onPress={() => setQuery('')} /> : null}
-      </View>
+        {query ? <IconButton icon="close-circle" label="Clear" size={18} onPress={() => setQuery('')} /> : null}
+      </Well>
 
       <View style={styles.toolbar}>
         <Pressable
@@ -204,10 +205,18 @@ export default function LibraryScreen({ navigation, route }: Props) {
           hitSlop={HIT_SLOP}
           accessibilityRole="button"
           accessibilityLabel="Filters"
+          style={[
+            styles.toolbarButton,
+            { borderRadius: radii.pill, backgroundColor: showFilters || activeExtra > 0 ? withAlpha(palette.ink, 0.06) : 'transparent' },
+          ]}
         >
+          <Ionicons name="options-outline" size={14} color={palette.inkSoft} />
           <Type role="caption" color={palette.inkSoft}>
-            {filtered.length} shown{activeExtra > 0 ? ` · ${activeExtra} filters` : ''}
-            {showFilters ? ' · hide' : ''}
+            {activeExtra > 0
+              ? `${filtered.length} shown · ${activeExtra} ${activeExtra === 1 ? 'filter' : 'filters'}`
+              : debouncedQuery.trim()
+                ? `${filtered.length} shown`
+                : 'Filter'}
           </Type>
         </Pressable>
         <Pressable
@@ -216,11 +225,11 @@ export default function LibraryScreen({ navigation, route }: Props) {
             setSort((s) => SORT_ORDER[(SORT_ORDER.indexOf(s) + 1) % SORT_ORDER.length]);
           }}
           hitSlop={HIT_SLOP}
-          style={styles.sort}
+          style={[styles.toolbarButton, { borderRadius: radii.pill }]}
           accessibilityRole="button"
           accessibilityLabel={`Sort: ${SORT_LABELS[sort]}`}
         >
-          <Ionicons name="swap-vertical" size={15} color={palette.inkSoft} />
+          <Ionicons name="swap-vertical" size={14} color={palette.inkSoft} />
           <Type role="caption" color={palette.inkSoft}>
             {SORT_LABELS[sort]}
           </Type>
@@ -289,7 +298,7 @@ export default function LibraryScreen({ navigation, route }: Props) {
             <EmptyState
               icon="cube-outline"
               title="Nothing saved yet"
-              subtitle="Add something you don’t want to forget."
+              subtitle="Add an idea you don’t want to forget."
               actionLabel="Add"
               onAction={() => navigation.navigate('EntryEdit')}
             />
@@ -366,15 +375,21 @@ const styles = StyleSheet.create({
     gap: spacing.xl,
     paddingBottom: spacing.md,
   },
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    paddingTop: spacing.xl,
+  },
   brand: {
     gap: 6,
-    paddingTop: spacing.xl,
   },
   search: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: spacing.xs,
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
   },
   searchInput: {
     flex: 1,
@@ -385,11 +400,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: -spacing.sm,
+    marginHorizontal: -spacing.sm,
   },
-  sort: {
+  toolbarButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
   },
   filters: {
     gap: spacing.sm,

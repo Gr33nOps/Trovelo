@@ -14,6 +14,7 @@ import { useToast } from '../context/ToastContext';
 import { useHaptics } from '../hooks/useHaptics';
 import { MainTabScreenProps } from '../navigation';
 import { EntryStatus } from '../types';
+import { ActionSheet } from '../ui/ActionSheet';
 import { Button } from '../ui/Button';
 import { IconButton } from '../ui/Controls';
 import { EmptyState } from '../ui/EmptyState';
@@ -28,7 +29,7 @@ const RECENT_WINDOW = 8;
 export default function HomeScreen({ navigation }: Props) {
   const tabBarHeight = useBottomTabBarHeight();
   const insets = useSafeAreaInsets();
-  const { entries, categories, recordViewed, setStatus, toggleFavorite, updateEntry } = useEntries();
+  const { entries, categories, recordViewed, setStatus, updateEntry } = useEntries();
   const { palette, streak } = useTheme();
   const haptics = useHaptics();
   const toast = useToast();
@@ -36,6 +37,7 @@ export default function HomeScreen({ navigation }: Props) {
   const [revealedId, setRevealedId] = useState<string | null>(null);
   const recentlyShown = useRef<string[]>([]);
   const [memoryDismissed, setMemoryDismissed] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [now, setNow] = useState(Date.now());
   const currentDay = dayKey(new Date(now));
 
@@ -101,6 +103,11 @@ export default function HomeScreen({ navigation }: Props) {
     }, []),
   );
 
+  /**
+   * Keep / Done / Pass is a decision, so it moves straight on to the next
+   * idea. "Show me another" is the separate action for when you don't want
+   * to decide on this one at all — keeping the two from doing the same thing.
+   */
   const handleStatus = (status: EntryStatus) => {
     if (!revealed) return;
     setStatus(revealed.id, status);
@@ -108,6 +115,7 @@ export default function HomeScreen({ navigation }: Props) {
     if (status === 'not_useful') {
       toast.show({ message: 'Kept, but it will stop turning up in surprises.' });
     }
+    surprise();
   };
 
   return (
@@ -142,67 +150,37 @@ export default function HomeScreen({ navigation }: Props) {
           <EmptyState
             icon="cube-outline"
             title="Your box is empty"
-            subtitle="Add something, then come back for a surprise."
+            subtitle="Add an idea, then come back for a surprise."
             actionLabel="Add"
             onAction={() => navigation.navigate('EntryEdit')}
           />
         ) : revealed ? (
           <View style={styles.reveal}>
-            <SurpriseCard
-              entry={revealed}
-              folderName={folderName}
-              onToggleFavorite={() => {
-                toggleFavorite(revealed.id);
-                haptics.light();
-              }}
-            />
+            <SurpriseCard entry={revealed} folderName={folderName} />
 
-            <Pressable
-              onPress={surprise}
-              hitSlop={HIT_SLOP}
-              accessibilityRole="button"
-              accessibilityLabel="Show me another"
-              style={({ pressed }) => [{ opacity: pressed ? 0.5 : 1, alignSelf: 'flex-start' }]}
-            >
-              <Type role="body" color={palette.inkSoft} style={styles.another}>
-                Show me another
-              </Type>
-            </Pressable>
+            <View style={styles.revealToolbar}>
+              <Pressable
+                onPress={surprise}
+                hitSlop={HIT_SLOP}
+                accessibilityRole="button"
+                accessibilityLabel="Show me another"
+              >
+                <Type role="body" color={palette.inkSoft} style={styles.another}>
+                  Show me another
+                </Type>
+              </Pressable>
+              <IconButton
+                icon="ellipsis-horizontal"
+                label="More actions"
+                onPress={() => {
+                  haptics.medium();
+                  setMoreOpen(true);
+                }}
+              />
+            </View>
 
             <View style={styles.actions}>
               <StatusPicker value={revealed.status} onChange={handleStatus} hideNew />
-              <View style={styles.row}>
-                <Button
-                  label="Open"
-                  onPress={() => navigation.navigate('EntryDetail', { entryId: revealed.id })}
-                  variant="plain"
-                  size="md"
-                  style={styles.flex}
-                />
-                <Button
-                  label="Share"
-                  onPress={() => {
-                    const msg = revealed.title ? `${revealed.title}\n\n${revealed.text}` : revealed.text;
-                    void Share.share({ message: msg }).catch(() => {
-                      haptics.warning();
-                      toast.show({ message: 'This entry could not be shared.', tone: 'warning' });
-                    });
-                  }}
-                  variant="plain"
-                  size="md"
-                  style={styles.flex}
-                />
-                <Button
-                  label="Put back"
-                  onPress={() => {
-                    setRevealedId(null);
-                    haptics.light();
-                  }}
-                  variant="plain"
-                  size="md"
-                  style={styles.flex}
-                />
-              </View>
             </View>
           </View>
         ) : (
@@ -280,6 +258,36 @@ export default function HomeScreen({ navigation }: Props) {
           </View>
         ) : null}
       </ScrollView>
+
+      <ActionSheet
+        visible={moreOpen}
+        title={revealed?.title ?? 'This idea'}
+        onClose={() => setMoreOpen(false)}
+        actions={
+          revealed
+            ? [
+                { label: 'Open', onPress: () => navigation.navigate('EntryDetail', { entryId: revealed.id }) },
+                {
+                  label: 'Share',
+                  onPress: () => {
+                    const msg = revealed.title ? `${revealed.title}\n\n${revealed.text}` : revealed.text;
+                    void Share.share({ message: msg }).catch(() => {
+                      haptics.warning();
+                      toast.show({ message: 'This entry could not be shared.', tone: 'warning' });
+                    });
+                  },
+                },
+                {
+                  label: 'Put back',
+                  onPress: () => {
+                    setRevealedId(null);
+                    haptics.light();
+                  },
+                },
+              ]
+            : []
+        }
+      />
     </Backdrop>
   );
 }
@@ -310,16 +318,16 @@ const styles = StyleSheet.create({
     gap: spacing.xl,
     paddingTop: spacing.lg,
   },
+  revealToolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   another: {
     textDecorationLine: 'underline',
   },
   actions: {
     gap: spacing.lg,
-    paddingTop: spacing.md,
-  },
-  row: {
-    flexDirection: 'row',
-    gap: spacing.sm,
   },
   flex: {
     flex: 1,

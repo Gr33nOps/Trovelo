@@ -2,16 +2,16 @@
   "expo": {
     "name": "Trovelo",
     "slug": "trovelo",
-    "version": "2.0.0",
+    "version": "2.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-    "backgroundColor": "#FAFAF8",
+    "backgroundColor": "#121211",
     "primaryColor": "#8B6914",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.trovelo.app",
-      "buildNumber": "16",
+      "buildNumber": "17",
       "userInterfaceStyle": "automatic",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
@@ -19,14 +19,14 @@
     },
     "android": {
       "package": "com.trovelo.app",
-      "versionCode": 16,
+      "versionCode": 17,
       "blockedPermissions": [
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE"
       ],
       "userInterfaceStyle": "automatic",
       "adaptiveIcon": {
-        "backgroundColor": "#FAFAF8",
+        "backgroundColor": "#121211",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"

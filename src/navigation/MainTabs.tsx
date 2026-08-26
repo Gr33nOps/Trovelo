@@ -1,9 +1,10 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
-import { fonts, fontSizes, spacing, weights } from '../constants/theme';
+import { fonts, fontSizes, radius as radii, spacing, weights } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { useHaptics } from '../hooks/useHaptics';
 import HomeScreen from '../screens/HomeScreen';
@@ -26,12 +27,14 @@ function NewPlaceholder() {
   return <View style={{ flex: 1 }} />;
 }
 
-/** Text-only bar: Trovelo · Surprise · + New · Settings. Stats stays reachable. */
+const FAB_SIZE = 52;
+
+/** Trovelo · Surprise · (+) · Settings, each a destination except the raised compose button. Stats stays reachable. */
 export function MainTabs() {
   const { palette } = useTheme();
   const insets = useSafeAreaInsets();
   const haptics = useHaptics();
-  const barHeight = 52 + Math.max(insets.bottom, spacing.sm);
+  const barHeight = 56 + Math.max(insets.bottom, spacing.sm);
 
   return (
     <Tab.Navigator
@@ -48,13 +51,12 @@ export function MainTabs() {
           shadowOpacity: 0,
           height: barHeight,
           paddingBottom: Math.max(insets.bottom, spacing.sm),
-          paddingTop: spacing.sm,
+          paddingTop: spacing.xs,
         },
         tabBarItemStyle: {
           justifyContent: 'center',
           alignItems: 'center',
         },
-        tabBarIcon: () => null,
         tabBarShowLabel: true,
       }}
     >
@@ -62,6 +64,9 @@ export function MainTabs() {
         name="Library"
         component={LibraryScreen}
         options={{
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'cube' : 'cube-outline'} size={22} color={color} />
+          ),
           tabBarLabel: ({ color, focused }) => <TabLabel label="Trovelo" color={color} focused={focused} />,
         }}
       />
@@ -69,6 +74,9 @@ export function MainTabs() {
         name="Home"
         component={HomeScreen}
         options={{
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'shuffle' : 'shuffle-outline'} size={22} color={color} />
+          ),
           tabBarLabel: ({ color, focused }) => <TabLabel label="Surprise" color={color} focused={focused} />,
         }}
       />
@@ -83,13 +91,38 @@ export function MainTabs() {
           },
         })}
         options={{
-          tabBarLabel: ({ color, focused }) => <TabLabel label="+ New" color={color} focused={focused} />,
+          tabBarLabel: () => null,
+          tabBarButton: (props) => (
+            <Pressable
+              onPress={props.onPress}
+              accessibilityRole="button"
+              accessibilityLabel="Add a new idea"
+              hitSlop={8}
+              style={styles.fabSlot}
+            >
+              <View
+                style={[
+                  styles.fab,
+                  {
+                    backgroundColor: palette.accent,
+                    borderRadius: radii.pill,
+                    shadowColor: palette.shadow,
+                  },
+                ]}
+              >
+                <Ionicons name="add" size={26} color={palette.accentInk} />
+              </View>
+            </Pressable>
+          ),
         }}
       />
       <Tab.Screen
         name="Settings"
         component={SettingsScreen}
         options={{
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'settings' : 'settings-outline'} size={22} color={color} />
+          ),
           tabBarLabel: ({ color, focused }) => <TabLabel label="Settings" color={color} focused={focused} />,
         }}
       />
@@ -107,12 +140,7 @@ export function MainTabs() {
 
 function TabLabel({ label, color, focused }: { label: string; color: string; focused: boolean }) {
   return (
-    <Type
-      role="body"
-      color={color}
-      numberOfLines={1}
-      style={[styles.label, focused && styles.labelFocused]}
-    >
+    <Type role="caption" color={color} numberOfLines={1} style={[styles.label, focused && styles.labelFocused]}>
       {label}
     </Type>
   );
@@ -121,13 +149,29 @@ function TabLabel({ label, color, focused }: { label: string; color: string; foc
 const styles = StyleSheet.create({
   label: {
     fontFamily: fonts.body,
-    fontSize: fontSizes.sm,
+    fontSize: fontSizes.xxs,
     fontWeight: weights.regular,
     textAlign: 'center',
-    marginTop: -18,
+    marginTop: 2,
   },
   labelFocused: {
     fontFamily: fonts.bodySemibold,
     fontWeight: weights.semibold,
+  },
+  fabSlot: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+  },
+  fab: {
+    width: FAB_SIZE,
+    height: FAB_SIZE,
+    marginTop: -22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 6,
   },
 });

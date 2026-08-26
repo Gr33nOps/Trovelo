@@ -32,7 +32,7 @@ const REVIEW_SIZE = 5;
 export default function ReviewScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const { palette } = useTheme();
-  const { entries, categories, setStatus, toggleFavorite, recordViewed } = useEntries();
+  const { entries, categories, setStatus, recordViewed } = useEntries();
   const haptics = useHaptics();
   const toast = useToast();
 
@@ -132,14 +132,7 @@ export default function ReviewScreen({ navigation }: Props) {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xxl }]}
         showsVerticalScrollIndicator={false}
       >
-        <SurpriseCard
-          entry={current}
-          folderName={folderName}
-          onToggleFavorite={() => {
-            toggleFavorite(current.id);
-            haptics.light();
-          }}
-        />
+        <SurpriseCard entry={current} folderName={folderName} />
 
         <Panel style={styles.actionPanel} borderRadius={radii.lg}>
           <Type role="label" pressed>
