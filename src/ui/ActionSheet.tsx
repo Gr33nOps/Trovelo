@@ -15,11 +15,11 @@ export interface ActionSheetItem {
 }
 
 interface Props {
-  visible: boolean;
-  title: string;
-  message?: string;
-  actions: ActionSheetItem[];
-  onClose: () => void;
+  readonly visible: boolean;
+  readonly title: string;
+  readonly message?: string;
+  readonly actions: ActionSheetItem[];
+  readonly onClose: () => void;
 }
 
 /** Cross-platform action menu without Android Alert's three-button limit. */

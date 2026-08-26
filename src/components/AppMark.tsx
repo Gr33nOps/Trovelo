@@ -7,12 +7,12 @@ const MARK = require('../../assets/logo-mark.png');
 
 interface Props {
   /** Tile edge length. The mark itself is inset within it. */
-  size?: number;
+  readonly size?: number;
   /** Overrides the live theme's accent, e.g. for previewing a choice that isn't selected yet. */
-  accentColor?: string;
+  readonly accentColor?: string;
   /** Overrides the live theme's backdrop. */
-  background?: string;
-  borderColor?: string;
+  readonly background?: string;
+  readonly borderColor?: string;
 }
 
 /**

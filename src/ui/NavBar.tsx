@@ -9,17 +9,17 @@ import { useHaptics } from '../hooks/useHaptics';
 import { Type } from './Type';
 
 export interface NavBarProps {
-  title: string;
-  subtitle?: string;
-  onBack?: () => void;
-  backLabel?: string;
-  right?: ReactNode;
-  below?: ReactNode;
+  readonly title: string;
+  readonly subtitle?: string;
+  readonly onBack?: () => void;
+  readonly backLabel?: string;
+  readonly right?: ReactNode;
+  readonly below?: ReactNode;
   /** Left-aligned page title (main tabs). */
-  align?: 'center' | 'start';
+  readonly align?: 'center' | 'start';
   /** Large page title. */
-  large?: boolean;
-  borderless?: boolean;
+  readonly large?: boolean;
+  readonly borderless?: boolean;
 }
 
 /**
@@ -89,7 +89,12 @@ export function NavBar({
   );
 }
 
-function BackButton({ label, onPress }: { label: string; onPress: () => void }) {
+function actionOpacity(disabled: boolean, pressed: boolean): number {
+  if (disabled) return 0.3;
+  return pressed ? 0.5 : 1;
+}
+
+function BackButton({ label, onPress }: { readonly label: string; readonly onPress: () => void }) {
   const { palette } = useTheme();
   const haptics = useHaptics();
   return (
@@ -116,10 +121,10 @@ export function NavTextAction({
   disabled = false,
   accent = false,
 }: {
-  label: string;
-  onPress: () => void;
-  disabled?: boolean;
-  accent?: boolean;
+  readonly label: string;
+  readonly onPress: () => void;
+  readonly disabled?: boolean;
+  readonly accent?: boolean;
 }) {
   const { palette } = useTheme();
   const haptics = useHaptics();
@@ -135,7 +140,7 @@ export function NavTextAction({
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ disabled }}
-      style={({ pressed }) => [styles.textAction, { opacity: disabled ? 0.3 : pressed ? 0.5 : 1 }]}
+      style={({ pressed }) => [styles.textAction, { opacity: actionOpacity(disabled, pressed) }]}
     >
       <Type role="bodyStrong" color={accent ? palette.accent : palette.ink}>
         {label}
@@ -150,10 +155,10 @@ export function NavAction({
   onPress,
   disabled = false,
 }: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  onPress: () => void;
-  disabled?: boolean;
+  readonly icon: keyof typeof Ionicons.glyphMap;
+  readonly label: string;
+  readonly onPress: () => void;
+  readonly disabled?: boolean;
 }) {
   const { palette } = useTheme();
   const haptics = useHaptics();
@@ -169,7 +174,7 @@ export function NavAction({
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ disabled }}
-      style={({ pressed }) => [styles.iconAction, { opacity: disabled ? 0.3 : pressed ? 0.5 : 1 }]}
+      style={({ pressed }) => [styles.iconAction, { opacity: actionOpacity(disabled, pressed) }]}
     >
       <Ionicons name={icon} size={22} color={palette.ink} />
     </Pressable>

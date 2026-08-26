@@ -43,9 +43,9 @@ export const Texture = memo(function Texture({
 });
 
 interface GradientSurfaceProps {
-  gradient: Gradient;
-  style?: StyleProp<ViewStyle>;
-  children?: ReactNode;
+  readonly gradient: Gradient;
+  readonly style?: StyleProp<ViewStyle>;
+  readonly children?: ReactNode;
 }
 
 function GradientSurface({ gradient, style, children }: GradientSurfaceProps) {
@@ -67,8 +67,8 @@ export function Backdrop({
   style,
   children,
 }: {
-  style?: StyleProp<ViewStyle>;
-  children?: ReactNode;
+  readonly style?: StyleProp<ViewStyle>;
+  readonly children?: ReactNode;
 }) {
   const { palette } = useTheme();
   return (
@@ -80,16 +80,16 @@ export function Backdrop({
 }
 
 export interface PanelProps {
-  children?: ReactNode;
-  style?: StyleProp<ViewStyle>;
+  readonly children?: ReactNode;
+  readonly style?: StyleProp<ViewStyle>;
   /** Inner padding shortcut; omit and pass your own padding via `style`. */
-  padded?: boolean;
-  level?: ElevationLevel;
-  borderRadius?: number;
-  texture?: TextureName | 'none';
+  readonly padded?: boolean;
+  readonly level?: ElevationLevel;
+  readonly borderRadius?: number;
+  readonly texture?: TextureName | 'none';
   /** Tints the whole panel. Used for the accent-coloured hero card. */
-  gradient?: Gradient;
-  borderColor?: string;
+  readonly gradient?: Gradient;
+  readonly borderColor?: string;
 }
 
 /** A flat card: solid fill and a thin border. Shadow only at 'floating'/'modal' levels. */
@@ -139,9 +139,9 @@ export function Well({
   style,
   borderRadius = radii.md,
 }: {
-  children?: ReactNode;
-  style?: StyleProp<ViewStyle>;
-  borderRadius?: number;
+  readonly children?: ReactNode;
+  readonly style?: StyleProp<ViewStyle>;
+  readonly borderRadius?: number;
 }) {
   const { palette } = useTheme();
   return (
@@ -162,7 +162,7 @@ export function Well({
 }
 
 /** A single flat hairline divider. */
-export function Rule({ style, inset = 0 }: { style?: StyleProp<ViewStyle>; inset?: number }) {
+export function Rule({ style, inset = 0 }: { readonly style?: StyleProp<ViewStyle>; readonly inset?: number }) {
   const { palette } = useTheme();
   return (
     <View

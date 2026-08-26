@@ -77,5 +77,5 @@ export function pickSurprise(entries: readonly Entry[], recentIds: readonly stri
     cursor -= item.weight;
     if (cursor <= 0) return item.entry;
   }
-  return candidates[candidates.length - 1].entry;
+  return candidates.at(-1)!.entry;
 }

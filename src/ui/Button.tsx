@@ -27,20 +27,20 @@ export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'plain' | 'outl
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 export interface ButtonProps extends Pick<AccessibilityProps, 'accessibilityHint'> {
-  label: string;
-  onPress: () => void;
-  onLongPress?: () => void;
-  variant?: ButtonVariant;
-  size?: ButtonSize;
-  icon?: React.ReactNode;
-  iconRight?: React.ReactNode;
-  fullWidth?: boolean;
-  disabled?: boolean;
-  loading?: boolean;
-  haptic?: 'light' | 'medium' | 'success' | 'warning' | false;
-  tint?: string;
-  style?: StyleProp<ViewStyle>;
-  accessibilityLabel?: string;
+  readonly label: string;
+  readonly onPress: () => void;
+  readonly onLongPress?: () => void;
+  readonly variant?: ButtonVariant;
+  readonly size?: ButtonSize;
+  readonly icon?: React.ReactNode;
+  readonly iconRight?: React.ReactNode;
+  readonly fullWidth?: boolean;
+  readonly disabled?: boolean;
+  readonly loading?: boolean;
+  readonly haptic?: 'light' | 'medium' | 'success' | 'warning' | false;
+  readonly tint?: string;
+  readonly style?: StyleProp<ViewStyle>;
+  readonly accessibilityLabel?: string;
   testID?: string;
 }
 

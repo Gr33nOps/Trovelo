@@ -4,7 +4,7 @@ import { Appearance, Pressable, ScrollView, StyleSheet, Text, View } from 'react
 import { DEFAULT_ACCENT_ID, buildPalette, fonts, radius, spacing } from '../constants/theme';
 
 interface Props {
-  children: ReactNode;
+  readonly children: ReactNode;
 }
 
 interface State {

@@ -46,7 +46,7 @@ function coerce(raw: unknown): Settings {
  * set of independent reads on startup. One record also makes migration a
  * single step.
  */
-export function SettingsProvider({ children }: { children: ReactNode }) {
+export function SettingsProvider({ children }: { readonly children: ReactNode }) {
   const [settings, setSettings] = useState<Settings>(DEFAULTS);
   const [ready, setReady] = useState(false);
   const settingsRef = useRef(settings);

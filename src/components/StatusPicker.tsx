@@ -10,10 +10,10 @@ import { EntryStatus } from '../types';
 import { Type } from '../ui/Type';
 
 interface Props {
-  value: EntryStatus;
-  onChange: (status: EntryStatus) => void;
+  readonly value: EntryStatus;
+  readonly onChange: (status: EntryStatus) => void;
   /** Hides the "New" option, which is only ever an initial state. */
-  hideNew?: boolean;
+  readonly hideNew?: boolean;
 }
 
 interface ToneSkin {

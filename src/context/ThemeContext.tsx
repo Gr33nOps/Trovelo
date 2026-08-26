@@ -52,7 +52,7 @@ export interface Theme {
 
 const ThemeContext = createContext<Theme | null>(null);
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
+export function ThemeProvider({ children }: { readonly children: ReactNode }) {
   const systemScheme = useColorScheme();
   const [prefs, setPrefs] = useState<Preferences>(DEFAULT_PREFERENCES);
   const [ready, setReady] = useState(false);

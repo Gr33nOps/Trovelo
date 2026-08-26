@@ -8,7 +8,7 @@ import { PAGE_PAD, radius as radii, spacing, withAlpha } from '../constants/them
 import { useEntries } from '../context/EntriesContext';
 import { useTheme } from '../context/ThemeContext';
 import { MainTabScreenProps } from '../navigation';
-import { EntryStatus } from '../types';
+import { Entry, EntryStatus } from '../types';
 import { EmptyState } from '../ui/EmptyState';
 import { SectionHeader } from '../ui/Group';
 import { IconTile } from '../ui/IconTile';
@@ -21,52 +21,61 @@ type Props = MainTabScreenProps<'Stats'>;
 
 const DAY = 86_400_000;
 
+function neverSeenInsight(neverSeen: number, rediscoverable: number): string {
+  if (neverSeen > 0) {
+    return `${neverSeen} ${neverSeen === 1 ? 'entry has' : 'entries have'} never come back out of the box.`;
+  }
+  if (rediscoverable > 0) return 'Everything eligible for rediscovery has resurfaced at least once.';
+  return 'Nothing is currently waiting to be rediscovered.';
+}
+
+function computeStats(entries: Entry[]) {
+  const byStatus: Record<EntryStatus, number> = { new: 0, interesting: 0, done: 0, not_useful: 0 };
+  let rediscoveries = 0;
+  let favorites = 0;
+  let words = 0;
+  let oldestUnseen: number | null = null;
+  const now = Date.now();
+  let addedThisMonth = 0;
+  let archived = 0;
+
+  for (const entry of entries) {
+    byStatus[entry.status] += 1;
+    rediscoveries += entry.timesRediscovered;
+    if (entry.isFavorite) favorites += 1;
+    if (entry.archivedAt) archived += 1;
+    words += entry.text.trim().split(/\s+/).filter(Boolean).length;
+    if (now - entry.createdAt < 30 * DAY) addedThisMonth += 1;
+    const eligibleForRediscovery = !entry.archivedAt && entry.status !== 'not_useful';
+    if (eligibleForRediscovery) {
+      const lastSeen = entry.lastViewedAt ?? entry.createdAt;
+      if (oldestUnseen === null || lastSeen < oldestUnseen) oldestUnseen = lastSeen;
+    }
+  }
+
+  const rediscoverable = entries.filter((entry) => !entry.archivedAt && entry.status !== 'not_useful');
+  const neverSeen = rediscoverable.filter((entry) => !entry.lastViewedAt).length;
+
+  return {
+    total: entries.length,
+    byStatus,
+    rediscoveries,
+    favorites,
+    words,
+    addedThisMonth,
+    neverSeen,
+    rediscoverable: rediscoverable.length,
+    archived,
+    oldestUnseenDays: oldestUnseen === null ? 0 : Math.floor((now - oldestUnseen) / DAY),
+  };
+}
+
 export default function StatsScreen({ navigation }: Props) {
   const tabBarHeight = useBottomTabBarHeight();
   const { palette, streak, bestStreak, daysOpened } = useTheme();
   const { entries, tags } = useEntries();
 
-  const stats = useMemo(() => {
-    const byStatus: Record<EntryStatus, number> = { new: 0, interesting: 0, done: 0, not_useful: 0 };
-    let rediscoveries = 0;
-    let favorites = 0;
-    let words = 0;
-    let oldestUnseen: number | null = null;
-    const now = Date.now();
-    let addedThisMonth = 0;
-    let archived = 0;
-
-    for (const entry of entries) {
-      byStatus[entry.status] += 1;
-      rediscoveries += entry.timesRediscovered;
-      if (entry.isFavorite) favorites += 1;
-      if (entry.archivedAt) archived += 1;
-      words += entry.text.trim().split(/\s+/).filter(Boolean).length;
-      if (now - entry.createdAt < 30 * DAY) addedThisMonth += 1;
-      const eligibleForRediscovery = !entry.archivedAt && entry.status !== 'not_useful';
-      if (eligibleForRediscovery) {
-        const lastSeen = entry.lastViewedAt ?? entry.createdAt;
-        if (oldestUnseen === null || lastSeen < oldestUnseen) oldestUnseen = lastSeen;
-      }
-    }
-
-    const rediscoverable = entries.filter((entry) => !entry.archivedAt && entry.status !== 'not_useful');
-    const neverSeen = rediscoverable.filter((entry) => !entry.lastViewedAt).length;
-
-    return {
-      total: entries.length,
-      byStatus,
-      rediscoveries,
-      favorites,
-      words,
-      addedThisMonth,
-      neverSeen,
-      rediscoverable: rediscoverable.length,
-      archived,
-      oldestUnseenDays:
-        oldestUnseen === null ? 0 : Math.floor((now - oldestUnseen) / DAY),
-    };
-  }, [entries]);
+  const stats = useMemo(() => computeStats(entries), [entries]);
 
   if (entries.length === 0) {
     return (
@@ -161,13 +170,7 @@ export default function StatsScreen({ navigation }: Props) {
           <Panel style={styles.card} borderRadius={radii.lg}>
             <Insight
               icon="eye-off-outline"
-              text={
-                stats.neverSeen > 0
-                  ? `${stats.neverSeen} ${stats.neverSeen === 1 ? 'entry has' : 'entries have'} never come back out of the box.`
-                  : stats.rediscoverable > 0
-                    ? 'Everything eligible for rediscovery has resurfaced at least once.'
-                    : 'Nothing is currently waiting to be rediscovered.'
-              }
+              text={neverSeenInsight(stats.neverSeen, stats.rediscoverable)}
             />
             {stats.rediscoverable > 0 ? (
               <Insight
@@ -232,10 +235,10 @@ function StatTile({
   value,
   tint,
 }: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  value: number;
-  tint?: string;
+  readonly icon: keyof typeof Ionicons.glyphMap;
+  readonly label: string;
+  readonly value: number;
+  readonly tint?: string;
 }) {
   const { palette } = useTheme();
   const color = tint ?? palette.accent;
@@ -252,7 +255,7 @@ function StatTile({
   );
 }
 
-function Detail({ label, value }: { label: string; value: string }) {
+function Detail({ label, value }: { readonly label: string; readonly value: string }) {
   return (
     <View style={styles.detail}>
       <Type role="label" pressed>
@@ -263,7 +266,7 @@ function Detail({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Insight({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text: string }) {
+function Insight({ icon, text }: { readonly icon: keyof typeof Ionicons.glyphMap; readonly text: string }) {
   const { palette } = useTheme();
   return (
     <View style={styles.insight}>

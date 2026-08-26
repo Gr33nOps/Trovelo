@@ -29,6 +29,11 @@ const THEME_OPTIONS = [
   { value: 'dark' as ThemeMode, label: 'Night', icon: 'moon-outline' as const },
 ];
 
+function deleteFolderMessage(count: number): string {
+  if (count === 0) return 'This folder is empty.';
+  return `The ${count} ${count === 1 ? 'entry' : 'entries'} inside will be kept, just not in a folder any more.`;
+}
+
 export default function SettingsScreen({ navigation }: Props) {
   const tabBarHeight = useBottomTabBarHeight();
   const { palette, mode, setMode, isDark, accentId, setAccentId, resetPreferences } = useTheme();
@@ -77,9 +82,7 @@ export default function SettingsScreen({ navigation }: Props) {
     const count = entries.filter((entry) => entry.categoryId === id).length;
     Alert.alert(
       `Delete "${folder.name}"?`,
-      count > 0
-        ? `The ${count} ${count === 1 ? 'entry' : 'entries'} inside will be kept, just not in a folder any more.`
-        : 'This folder is empty.',
+      deleteFolderMessage(count),
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -117,10 +120,10 @@ export default function SettingsScreen({ navigation }: Props) {
               haptics.warning();
               toast.show({ message: 'Everything has been deleted.', tone: 'warning' });
               navigation.getParent()?.reset({ index: 0, routes: [{ name: 'Onboarding' }] });
-            } catch (caught) {
+            } catch (error) {
               haptics.warning();
               toast.show({
-                message: caught instanceof Error ? caught.message : 'Some data could not be deleted. Please try again.',
+                message: error instanceof Error ? error.message : 'Some data could not be deleted. Please try again.',
                 tone: 'warning',
               });
             } finally {

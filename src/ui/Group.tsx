@@ -13,10 +13,10 @@ export function SectionHeader({
   action,
   style,
 }: {
-  title: string;
-  hint?: string;
-  action?: ReactNode;
-  style?: StyleProp<ViewStyle>;
+  readonly title: string;
+  readonly hint?: string;
+  readonly action?: ReactNode;
+  readonly style?: StyleProp<ViewStyle>;
 }) {
   return (
     <View style={[styles.sectionHeader, style]}>
@@ -40,9 +40,8 @@ export function Group({
   children,
   style,
 }: {
-  children: ReactNode;
-  style?: StyleProp<ViewStyle>;
-  inset?: number;
+  readonly children: ReactNode;
+  readonly style?: StyleProp<ViewStyle>;
 }) {
   const items = Children.toArray(children).filter(isValidElement);
   return (
@@ -57,41 +56,27 @@ export function Group({
   );
 }
 
-export interface RowProps {
-  title: string;
-  subtitle?: string;
-  value?: string;
-  left?: ReactNode;
-  right?: ReactNode;
-  onPress?: () => void;
-  onLongPress?: () => void;
-  chevron?: boolean;
-  destructive?: boolean;
-  disabled?: boolean;
-  accessibilityHint?: string;
-  testID?: string;
-}
-
-export function Row({
+function RowBody({
   title,
   subtitle,
   value,
   left,
   right,
-  onPress,
-  onLongPress,
-  chevron,
-  destructive = false,
-  disabled = false,
-  accessibilityHint,
-  testID,
-}: RowProps) {
+  disabled,
+  titleColor,
+  showChevron,
+}: {
+  readonly title: string;
+  readonly subtitle?: string;
+  readonly value?: string;
+  readonly left?: ReactNode;
+  readonly right?: ReactNode;
+  readonly disabled: boolean;
+  readonly titleColor: string;
+  readonly showChevron: boolean;
+}) {
   const { palette } = useTheme();
-  const pressable = !!onPress && !disabled;
-  const showChevron = chevron ?? (pressable && !right);
-  const titleColor = destructive ? palette.danger : palette.ink;
-
-  const body = (
+  return (
     <View style={styles.row}>
       {left ? <View style={styles.rowLeft}>{left}</View> : null}
       <View style={styles.rowMain}>
@@ -113,36 +98,86 @@ export function Row({
       {showChevron ? <Ionicons name="chevron-forward" size={16} color={palette.inkFaint} /> : null}
     </View>
   );
+}
 
-  if (!pressable) {
+export interface RowProps {
+  readonly title: string;
+  readonly subtitle?: string;
+  readonly value?: string;
+  readonly left?: ReactNode;
+  readonly right?: ReactNode;
+  readonly onPress?: () => void;
+  readonly onLongPress?: () => void;
+  readonly chevron?: boolean;
+  readonly destructive?: boolean;
+  readonly disabled?: boolean;
+  readonly accessibilityHint?: string;
+  readonly testID?: string;
+}
+
+export function Row({
+  title,
+  subtitle,
+  value,
+  left,
+  right,
+  onPress,
+  onLongPress,
+  chevron,
+  destructive = false,
+  disabled = false,
+  accessibilityHint,
+  testID,
+}: RowProps) {
+  const { palette } = useTheme();
+  const interactive = Boolean(onPress);
+  const pressable = interactive && !disabled;
+  const showChevron = chevron ?? (pressable && !right);
+  const titleColor = destructive ? palette.danger : palette.ink;
+  const accessibilityLabel = subtitle ? `${title}. ${subtitle}` : title;
+
+  const body = (
+    <RowBody
+      title={title}
+      subtitle={subtitle}
+      value={value}
+      left={left}
+      right={right}
+      disabled={disabled}
+      titleColor={titleColor}
+      showChevron={showChevron}
+    />
+  );
+
+  if (pressable) {
     return (
-      <View
+      <Pressable
+        onPress={onPress}
+        onLongPress={onLongPress}
         testID={testID}
-        accessible={!!onPress || !right}
-        accessibilityRole={onPress ? 'button' : undefined}
-        accessibilityLabel={onPress ? (subtitle ? `${title}. ${subtitle}` : title) : undefined}
-        accessibilityHint={onPress ? accessibilityHint : undefined}
-        accessibilityState={onPress ? { disabled } : undefined}
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        accessibilityHint={accessibilityHint}
+        accessibilityState={{ disabled }}
+        android_ripple={{ color: palette.bevelBottom }}
+        style={({ pressed }) => (pressed ? { opacity: 0.55 } : null)}
       >
         {body}
-      </View>
+      </Pressable>
     );
   }
 
   return (
-    <Pressable
-      onPress={onPress}
-      onLongPress={onLongPress}
+    <View
       testID={testID}
-      accessibilityRole="button"
-      accessibilityLabel={subtitle ? `${title}. ${subtitle}` : title}
-      accessibilityHint={accessibilityHint}
-      accessibilityState={{ disabled }}
-      android_ripple={{ color: palette.bevelBottom }}
-      style={({ pressed }) => (pressed ? { opacity: 0.55 } : null)}
+      accessible={interactive || !right}
+      accessibilityRole={interactive ? 'button' : undefined}
+      accessibilityLabel={interactive ? accessibilityLabel : undefined}
+      accessibilityHint={interactive ? accessibilityHint : undefined}
+      accessibilityState={interactive ? { disabled } : undefined}
     >
       {body}
-    </Pressable>
+    </View>
   );
 }
 

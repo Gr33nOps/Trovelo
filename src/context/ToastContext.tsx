@@ -56,7 +56,7 @@ const TAB_BAR_HEIGHT_ESTIMATE = 56;
  * A single transient message with an optional action, used mainly to make
  * destructive operations undoable instead of asking "are you sure?" every time.
  */
-export function ToastProvider({ children }: { children: ReactNode }) {
+export function ToastProvider({ children }: { readonly children: ReactNode }) {
   const [toast, setToast] = useState<ToastOptions | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -96,7 +96,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   );
 }
 
-function ToastView({ toast, onDismiss }: { toast: ToastOptions; onDismiss: () => void }) {
+function ToastView({ toast, onDismiss }: { readonly toast: ToastOptions; readonly onDismiss: () => void }) {
   const { palette } = useTheme();
   const insets = useSafeAreaInsets();
   const enter = useRef(new Animated.Value(0)).current;

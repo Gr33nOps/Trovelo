@@ -47,7 +47,7 @@ export function displayTag(tag: string): string {
 }
 
 function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return value.replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
 }
 
 /**
@@ -63,7 +63,7 @@ export function matchKnownTags(text: string, known: { tag: string; count: number
   return known
     .filter(({ tag }) => {
       const normalized = tag.normalize('NFKC').toLowerCase();
-      const boundary = '[^\\p{L}\\p{M}\\p{N}_]';
+      const boundary = String.raw`[^\p{L}\p{M}\p{N}_]`;
       return new RegExp(`(?:^|${boundary})${escapeRegExp(normalized)}(?=$|${boundary})`, 'u').test(lower);
     })
     .sort((a, b) => b.count - a.count)

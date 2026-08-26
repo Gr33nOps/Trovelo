@@ -9,12 +9,12 @@ import { formatShortDate, formatShortRelative } from '../utils/date';
 import { Type } from '../ui/Type';
 
 interface Props {
-  entry: Entry;
-  folderName?: string;
-  onPress: () => void;
-  onLongPress?: () => void;
+  readonly entry: Entry;
+  readonly folderName?: string;
+  readonly onPress: () => void;
+  readonly onLongPress?: () => void;
   /** Changes at local midnight so relative dates refresh. */
-  dayVersion?: string;
+  readonly dayVersion?: string;
 }
 
 /** Flat list row — meta on one line, body below. No card chrome. */

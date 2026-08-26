@@ -8,8 +8,8 @@ import { Type } from '../ui/Type';
 import { formatDate } from '../utils/date';
 
 interface Props {
-  entry: Entry;
-  folderName?: string;
+  readonly entry: Entry;
+  readonly folderName?: string;
 }
 
 /** Calm surprise reading surface — body and date. Nothing else. */

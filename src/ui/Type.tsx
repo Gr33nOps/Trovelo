@@ -6,14 +6,14 @@ import { useTheme } from '../context/ThemeContext';
 
 /** `role` is ours, not the ARIA one. Accessibility uses `accessibilityRole`. */
 export interface TypeProps extends Omit<RNTextProps, 'role'> {
-  role?: TextRole;
-  color?: string;
+  readonly role?: TextRole;
+  readonly color?: string;
   /** Stamp the type into the surface. Off for long-form body copy, where it hurts legibility. */
-  pressed?: boolean;
+  readonly pressed?: boolean;
   /** Use the shadow tuned for saturated backgrounds. */
-  onAccent?: boolean;
-  align?: TextStyle['textAlign'];
-  style?: StyleProp<TextStyle>;
+  readonly onAccent?: boolean;
+  readonly align?: TextStyle['textAlign'];
+  readonly style?: StyleProp<TextStyle>;
 }
 
 /**

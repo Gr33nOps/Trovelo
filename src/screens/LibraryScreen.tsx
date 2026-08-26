@@ -6,15 +6,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EntryCard } from '../components/EntryCard';
 import { STATUS_FILTER_OPTIONS } from '../constants/status';
-import { HIT_SLOP, PAGE_PAD, radius as radii, fonts, fontSizes, spacing, withAlpha } from '../constants/theme';
-import { useEntries } from '../context/EntriesContext';
+import { HIT_SLOP, PAGE_PAD, Palette, radius as radii, fonts, fontSizes, spacing, withAlpha } from '../constants/theme';
+import { TagCount, useEntries } from '../context/EntriesContext';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useDebouncedValue } from '../hooks/useDebounce';
 import { useHaptics } from '../hooks/useHaptics';
 import { MainTabScreenProps } from '../navigation';
-import { Entry, SortOrder, StatusFilter } from '../types';
-import { ActionSheet } from '../ui/ActionSheet';
+import { Category, Entry, SortOrder, StatusFilter } from '../types';
+import { ActionSheet, ActionSheetItem } from '../ui/ActionSheet';
 import { Button } from '../ui/Button';
 import { Chip, IconButton } from '../ui/Controls';
 import { EmptyState } from '../ui/EmptyState';
@@ -34,6 +34,201 @@ const SORT_LABELS: Record<SortOrder, string> = {
   az: 'A – Z',
 };
 const SORT_ORDER: SortOrder[] = ['newest', 'oldest', 'forgotten', 'rediscovered', 'az'];
+
+function ItemSeparator() {
+  return <Rule />;
+}
+
+function filterSummaryLabel(activeExtra: number, filteredCount: number, hasQuery: boolean): string {
+  if (activeExtra > 0) {
+    return `${filteredCount} shown · ${activeExtra} ${activeExtra === 1 ? 'filter' : 'filters'}`;
+  }
+  if (hasQuery) return `${filteredCount} shown`;
+  return 'Filter';
+}
+
+function LibraryHeader({
+  palette,
+  insetsTop,
+  keptCount,
+  onSurprise,
+  query,
+  onChangeQuery,
+  showFilters,
+  onToggleFilters,
+  activeExtra,
+  filteredCount,
+  hasQuery,
+  sort,
+  onCycleSort,
+  showArchived,
+  onToggleArchived,
+  statusFilter,
+  onChangeStatusFilter,
+  categories,
+  categoryFilter,
+  onChangeCategoryFilter,
+  allTags,
+  tagFilter,
+  onChangeTagFilter,
+}: {
+  readonly palette: Palette;
+  readonly insetsTop: number;
+  readonly keptCount: number;
+  readonly onSurprise: () => void;
+  readonly query: string;
+  readonly onChangeQuery: (value: string) => void;
+  readonly showFilters: boolean;
+  readonly onToggleFilters: () => void;
+  readonly activeExtra: number;
+  readonly filteredCount: number;
+  readonly hasQuery: boolean;
+  readonly sort: SortOrder;
+  readonly onCycleSort: () => void;
+  readonly showArchived: boolean;
+  readonly onToggleArchived: () => void;
+  readonly statusFilter: StatusFilter;
+  readonly onChangeStatusFilter: (value: StatusFilter) => void;
+  readonly categories: Category[];
+  readonly categoryFilter: string | null;
+  readonly onChangeCategoryFilter: (value: string | null) => void;
+  readonly allTags: TagCount[];
+  readonly tagFilter: string | null;
+  readonly onChangeTagFilter: (value: string | null) => void;
+}) {
+  return (
+    <View style={styles.header}>
+      <View style={{ height: insetsTop }} />
+
+      <View style={styles.brandRow}>
+        <View style={styles.brand}>
+          <Type role="display" accessibilityRole="header">
+            Trovelo
+          </Type>
+          <Type role="caption" color={palette.inkFaint}>
+            {keptCount} {keptCount === 1 ? 'idea' : 'ideas'} saved
+          </Type>
+        </View>
+        <Button
+          label="Surprise"
+          onPress={onSurprise}
+          variant="secondary"
+          size="sm"
+          icon={<Ionicons name="shuffle-outline" size={15} color={palette.ink} />}
+        />
+      </View>
+
+      <Well style={styles.search} borderRadius={radii.md}>
+        <Ionicons name="search-outline" size={17} color={palette.inkFaint} />
+        <TextInput
+          value={query}
+          onChangeText={onChangeQuery}
+          placeholder="Search your ideas"
+          placeholderTextColor={palette.inkFaint}
+          returnKeyType="search"
+          autoCorrect={false}
+          accessibilityLabel="Search"
+          selectionColor={palette.accent}
+          cursorColor={palette.accent}
+          style={[styles.searchInput, { color: palette.ink, fontFamily: fonts.body, fontSize: fontSizes.md }]}
+        />
+        {query ? <IconButton icon="close-circle" label="Clear" size={18} onPress={() => onChangeQuery('')} /> : null}
+      </Well>
+
+      <View style={styles.toolbar}>
+        <Pressable
+          onPress={onToggleFilters}
+          hitSlop={HIT_SLOP}
+          accessibilityRole="button"
+          accessibilityLabel="Filters"
+          style={[
+            styles.toolbarButton,
+            { borderRadius: radii.pill, backgroundColor: showFilters || activeExtra > 0 ? withAlpha(palette.ink, 0.06) : 'transparent' },
+          ]}
+        >
+          <Ionicons name="options-outline" size={14} color={palette.inkSoft} />
+          <Type role="caption" color={palette.inkSoft}>
+            {filterSummaryLabel(activeExtra, filteredCount, hasQuery)}
+          </Type>
+        </Pressable>
+        <Pressable
+          onPress={onCycleSort}
+          hitSlop={HIT_SLOP}
+          style={[styles.toolbarButton, { borderRadius: radii.pill }]}
+          accessibilityRole="button"
+          accessibilityLabel={`Sort: ${SORT_LABELS[sort]}`}
+        >
+          <Ionicons name="swap-vertical" size={14} color={palette.inkSoft} />
+          <Type role="caption" color={palette.inkSoft}>
+            {SORT_LABELS[sort]}
+          </Type>
+        </Pressable>
+      </View>
+
+      {showFilters ? (
+        <View style={styles.filters}>
+          <View style={styles.chips}>
+            <Chip label="Archived" active={showArchived} onPress={onToggleArchived} />
+            {STATUS_FILTER_OPTIONS.map((o) => (
+              <Chip
+                key={o.value}
+                label={o.label}
+                active={statusFilter === o.value}
+                onPress={() => onChangeStatusFilter(o.value)}
+              />
+            ))}
+          </View>
+          {categories.length > 0 ? (
+            <View style={styles.chips}>
+              <Chip label="All folders" active={categoryFilter === null} onPress={() => onChangeCategoryFilter(null)} />
+              <Chip label="Loose" active={categoryFilter === 'none'} onPress={() => onChangeCategoryFilter('none')} />
+              {categories.map((c) => (
+                <Chip
+                  key={c.id}
+                  label={c.name}
+                  active={categoryFilter === c.id}
+                  onPress={() => onChangeCategoryFilter(c.id)}
+                />
+              ))}
+            </View>
+          ) : null}
+          {allTags.length > 0 ? (
+            <View style={styles.chips}>
+              {tagFilter ? (
+                <Chip label={`#${displayTag(tagFilter)}`} active onPress={() => onChangeTagFilter(null)} />
+              ) : (
+                allTags.slice(0, 8).map(({ tag, count }) => (
+                  <Chip key={tag} label={`#${displayTag(tag)}`} count={count} onPress={() => onChangeTagFilter(tag)} />
+                ))
+              )}
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function buildEntryActions(
+  entry: Entry,
+  handlers: {
+    readonly onOpen: () => void;
+    readonly onToggleFavorite: () => void;
+    readonly onTogglePin: () => void;
+    readonly onEdit: () => void;
+    readonly onToggleArchive: () => void;
+    readonly onDelete: () => void;
+  },
+): ActionSheetItem[] {
+  return [
+    { label: 'Open', onPress: handlers.onOpen },
+    { label: entry.isFavorite ? 'Unfavourite' : 'Favourite', onPress: handlers.onToggleFavorite },
+    { label: entry.isPinned ? 'Unpin' : 'Pin', onPress: handlers.onTogglePin },
+    { label: 'Edit', onPress: handlers.onEdit },
+    { label: entry.archivedAt ? 'Unarchive' : 'Archive', onPress: handlers.onToggleArchive },
+    { label: 'Delete', destructive: true, onPress: handlers.onDelete },
+  ];
+}
 
 function sortKey(entry: Entry, order: SortOrder): number | string {
   switch (order) {
@@ -115,7 +310,7 @@ export default function LibraryScreen({ navigation, route }: Props) {
     const trimmed = debouncedQuery.trim();
     if (trimmed) return searchEntries(matches, trimmed);
 
-    const sorted = matches.sort((a, b) => {
+    matches.sort((a, b) => {
       const left = sortKey(a, sort);
       const right = sortKey(b, sort);
       if (typeof left === 'string' || typeof right === 'string') {
@@ -123,9 +318,9 @@ export default function LibraryScreen({ navigation, route }: Props) {
       }
       return left - right;
     });
-    const pinned = sorted.filter((e) => e.isPinned);
-    const rest = sorted.filter((e) => !e.isPinned);
-    return pinned.length ? [...pinned, ...rest] : sorted;
+    const pinned = matches.filter((e) => e.isPinned);
+    const rest = matches.filter((e) => !e.isPinned);
+    return pinned.length ? [...pinned, ...rest] : matches;
   }, [entries, debouncedQuery, statusFilter, categoryFilter, tagFilter, showArchived, sort]);
 
   const openEntry = useCallback(
@@ -158,126 +353,66 @@ export default function LibraryScreen({ navigation, route }: Props) {
     (statusFilter !== 'all' ? 1 : 0) + (categoryFilter ? 1 : 0) + (tagFilter ? 1 : 0) + (showArchived ? 1 : 0);
 
   const header = (
-    <View style={styles.header}>
-      <View style={{ height: insets.top }} />
-
-      <View style={styles.brandRow}>
-        <View style={styles.brand}>
-          <Type role="display" accessibilityRole="header">
-            Trovelo
-          </Type>
-          <Type role="caption" color={palette.inkFaint}>
-            {keptCount} {keptCount === 1 ? 'idea' : 'ideas'} saved
-          </Type>
-        </View>
-        <Button
-          label="Surprise"
-          onPress={() => {
-            haptics.medium();
-            navigation.navigate('Home');
-          }}
-          variant="secondary"
-          size="sm"
-          icon={<Ionicons name="shuffle-outline" size={15} color={palette.ink} />}
-        />
-      </View>
-
-      <Well style={styles.search} borderRadius={radii.md}>
-        <Ionicons name="search-outline" size={17} color={palette.inkFaint} />
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Search your ideas"
-          placeholderTextColor={palette.inkFaint}
-          returnKeyType="search"
-          autoCorrect={false}
-          accessibilityLabel="Search"
-          selectionColor={palette.accent}
-          cursorColor={palette.accent}
-          style={[styles.searchInput, { color: palette.ink, fontFamily: fonts.body, fontSize: fontSizes.md }]}
-        />
-        {query ? <IconButton icon="close-circle" label="Clear" size={18} onPress={() => setQuery('')} /> : null}
-      </Well>
-
-      <View style={styles.toolbar}>
-        <Pressable
-          onPress={() => setShowFilters((v) => !v)}
-          hitSlop={HIT_SLOP}
-          accessibilityRole="button"
-          accessibilityLabel="Filters"
-          style={[
-            styles.toolbarButton,
-            { borderRadius: radii.pill, backgroundColor: showFilters || activeExtra > 0 ? withAlpha(palette.ink, 0.06) : 'transparent' },
-          ]}
-        >
-          <Ionicons name="options-outline" size={14} color={palette.inkSoft} />
-          <Type role="caption" color={palette.inkSoft}>
-            {activeExtra > 0
-              ? `${filtered.length} shown · ${activeExtra} ${activeExtra === 1 ? 'filter' : 'filters'}`
-              : debouncedQuery.trim()
-                ? `${filtered.length} shown`
-                : 'Filter'}
-          </Type>
-        </Pressable>
-        <Pressable
-          onPress={() => {
-            haptics.light();
-            setSort((s) => SORT_ORDER[(SORT_ORDER.indexOf(s) + 1) % SORT_ORDER.length]);
-          }}
-          hitSlop={HIT_SLOP}
-          style={[styles.toolbarButton, { borderRadius: radii.pill }]}
-          accessibilityRole="button"
-          accessibilityLabel={`Sort: ${SORT_LABELS[sort]}`}
-        >
-          <Ionicons name="swap-vertical" size={14} color={palette.inkSoft} />
-          <Type role="caption" color={palette.inkSoft}>
-            {SORT_LABELS[sort]}
-          </Type>
-        </Pressable>
-      </View>
-
-      {showFilters ? (
-        <View style={styles.filters}>
-          <View style={styles.chips}>
-            <Chip label="Archived" active={showArchived} onPress={() => setShowArchived((v) => !v)} />
-            {STATUS_FILTER_OPTIONS.map((o) => (
-              <Chip
-                key={o.value}
-                label={o.label}
-                active={statusFilter === o.value}
-                onPress={() => setStatusFilter(o.value)}
-              />
-            ))}
-          </View>
-          {categories.length > 0 ? (
-            <View style={styles.chips}>
-              <Chip label="All folders" active={categoryFilter === null} onPress={() => setCategoryFilter(null)} />
-              <Chip label="Loose" active={categoryFilter === 'none'} onPress={() => setCategoryFilter('none')} />
-              {categories.map((c) => (
-                <Chip
-                  key={c.id}
-                  label={c.name}
-                  active={categoryFilter === c.id}
-                  onPress={() => setCategoryFilter(c.id)}
-                />
-              ))}
-            </View>
-          ) : null}
-          {allTags.length > 0 ? (
-            <View style={styles.chips}>
-              {tagFilter ? (
-                <Chip label={`#${displayTag(tagFilter)}`} active onPress={() => setTagFilter(null)} />
-              ) : (
-                allTags.slice(0, 8).map(({ tag, count }) => (
-                  <Chip key={tag} label={`#${displayTag(tag)}`} count={count} onPress={() => setTagFilter(tag)} />
-                ))
-              )}
-            </View>
-          ) : null}
-        </View>
-      ) : null}
-    </View>
+    <LibraryHeader
+      palette={palette}
+      insetsTop={insets.top}
+      keptCount={keptCount}
+      onSurprise={() => {
+        haptics.medium();
+        navigation.navigate('Home');
+      }}
+      query={query}
+      onChangeQuery={setQuery}
+      showFilters={showFilters}
+      onToggleFilters={() => setShowFilters((v) => !v)}
+      activeExtra={activeExtra}
+      filteredCount={filtered.length}
+      hasQuery={Boolean(debouncedQuery.trim())}
+      sort={sort}
+      onCycleSort={() => {
+        haptics.light();
+        setSort((s) => SORT_ORDER[(SORT_ORDER.indexOf(s) + 1) % SORT_ORDER.length]);
+      }}
+      showArchived={showArchived}
+      onToggleArchived={() => setShowArchived((v) => !v)}
+      statusFilter={statusFilter}
+      onChangeStatusFilter={setStatusFilter}
+      categories={categories}
+      categoryFilter={categoryFilter}
+      onChangeCategoryFilter={setCategoryFilter}
+      allTags={allTags}
+      tagFilter={tagFilter}
+      onChangeTagFilter={setTagFilter}
+    />
   );
+
+  let listEmptyComponent: React.ReactNode = null;
+  if (loaded) {
+    listEmptyComponent =
+      entries.length === 0 ? (
+        <EmptyState
+          icon="cube-outline"
+          title="Nothing saved yet"
+          subtitle="Add an idea you don’t want to forget."
+          actionLabel="Add"
+          onAction={() => navigation.navigate('EntryEdit')}
+        />
+      ) : (
+        <EmptyState
+          icon="search-outline"
+          title="No matches"
+          subtitle="Try a different search or clear filters."
+          actionLabel="Clear"
+          onAction={() => {
+            setQuery('');
+            setStatusFilter('all');
+            setCategoryFilter(null);
+            setTagFilter(null);
+            setShowArchived(false);
+          }}
+        />
+      );
+  }
 
   return (
     <Backdrop>
@@ -288,36 +423,12 @@ export default function LibraryScreen({ navigation, route }: Props) {
         extraData={dayVersion}
         ListHeaderComponent={header}
         contentContainerStyle={[styles.list, { paddingBottom: tabBarHeight + spacing.xl }]}
-        ItemSeparatorComponent={() => <Rule />}
+        ItemSeparatorComponent={ItemSeparator}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         initialNumToRender={10}
         windowSize={9}
-        ListEmptyComponent={
-          !loaded ? null : entries.length === 0 ? (
-            <EmptyState
-              icon="cube-outline"
-              title="Nothing saved yet"
-              subtitle="Add an idea you don’t want to forget."
-              actionLabel="Add"
-              onAction={() => navigation.navigate('EntryEdit')}
-            />
-          ) : (
-            <EmptyState
-              icon="search-outline"
-              title="No matches"
-              subtitle="Try a different search or clear filters."
-              actionLabel="Clear"
-              onAction={() => {
-                setQuery('');
-                setStatusFilter('all');
-                setCategoryFilter(null);
-                setTagFilter(null);
-                setShowArchived(false);
-              }}
-            />
-          )
-        }
+        ListEmptyComponent={listEmptyComponent}
       />
       <ActionSheet
         visible={actionEntry !== null}
@@ -325,41 +436,25 @@ export default function LibraryScreen({ navigation, route }: Props) {
         onClose={() => setActionEntry(null)}
         actions={
           actionEntry
-            ? [
-                { label: 'Open', onPress: () => openEntry(actionEntry) },
-                {
-                  label: actionEntry.isFavorite ? 'Unfavourite' : 'Favourite',
-                  onPress: () => toggleFavorite(actionEntry.id),
+            ? buildEntryActions(actionEntry, {
+                onOpen: () => openEntry(actionEntry),
+                onToggleFavorite: () => toggleFavorite(actionEntry.id),
+                onTogglePin: () => updateEntry(actionEntry.id, { isPinned: !actionEntry.isPinned }),
+                onEdit: () => navigation.navigate('EntryEdit', { entryId: actionEntry.id }),
+                onToggleArchive: () => {
+                  updateEntry(actionEntry.id, { archivedAt: actionEntry.archivedAt ? null : Date.now() });
+                  toast.show({ message: actionEntry.archivedAt ? 'Unarchived.' : 'Archived.' });
                 },
-                {
-                  label: actionEntry.isPinned ? 'Unpin' : 'Pin',
-                  onPress: () => updateEntry(actionEntry.id, { isPinned: !actionEntry.isPinned }),
+                onDelete: () => {
+                  const snapshot = actionEntry;
+                  deleteEntry(snapshot.id);
+                  toast.show({
+                    message: 'Deleted.',
+                    tone: 'warning',
+                    action: { label: 'Undo', onPress: () => restoreEntry(snapshot) },
+                  });
                 },
-                {
-                  label: 'Edit',
-                  onPress: () => navigation.navigate('EntryEdit', { entryId: actionEntry.id }),
-                },
-                {
-                  label: actionEntry.archivedAt ? 'Unarchive' : 'Archive',
-                  onPress: () => {
-                    updateEntry(actionEntry.id, { archivedAt: actionEntry.archivedAt ? null : Date.now() });
-                    toast.show({ message: actionEntry.archivedAt ? 'Unarchived.' : 'Archived.' });
-                  },
-                },
-                {
-                  label: 'Delete',
-                  destructive: true,
-                  onPress: () => {
-                    const snapshot = actionEntry;
-                    deleteEntry(snapshot.id);
-                    toast.show({
-                      message: 'Deleted.',
-                      tone: 'warning',
-                      action: { label: 'Undo', onPress: () => restoreEntry(snapshot) },
-                    });
-                  },
-                },
-              ]
+              })
             : []
         }
       />

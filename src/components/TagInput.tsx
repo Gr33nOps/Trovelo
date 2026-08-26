@@ -16,10 +16,10 @@ import {
 } from '../utils/tags';
 
 interface Props {
-  value: string[];
-  onChange: (tags: string[]) => void;
+  readonly value: string[];
+  readonly onChange: (tags: string[]) => void;
   /** Existing tags across the library, offered as quick picks. */
-  suggestions: string[];
+  readonly suggestions: string[];
 }
 
 export function TagInput({ value, onChange, suggestions }: Props) {

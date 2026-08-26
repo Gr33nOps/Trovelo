@@ -117,6 +117,149 @@ function applyPatch(entry: Entry, patch: EntryPatch): Entry {
   };
 }
 
+function applyAdd(state: EntriesState, entry: Entry): EntriesState {
+  if (state.entries.some((existing) => existing.id === entry.id)) return state;
+  const orphaned = entry.categoryId && !state.categories.some((category) => category.id === entry.categoryId);
+  return {
+    ...state,
+    entries: [orphaned ? { ...entry, categoryId: undefined } : entry, ...state.entries],
+  };
+}
+
+function applyInsert(state: EntriesState, incoming: Entry[]): EntriesState {
+  const existing = new Set(state.entries.map((e) => e.id));
+  const categoryIds = new Set(state.categories.map((category) => category.id));
+  const fresh = incoming.flatMap((entry) => {
+    if (existing.has(entry.id)) return [];
+    existing.add(entry.id);
+    const orphaned = entry.categoryId && !categoryIds.has(entry.categoryId);
+    return [orphaned ? { ...entry, categoryId: undefined } : entry];
+  });
+  if (fresh.length === 0) return state;
+  return {
+    ...state,
+    entries: [...fresh, ...state.entries].sort((a, b) => b.createdAt - a.createdAt),
+  };
+}
+
+function applyUpdate(state: EntriesState, id: string, rawPatch: EntryPatch): EntriesState {
+  const categoryRemoved =
+    typeof rawPatch.categoryId === 'string' &&
+    !state.categories.some((category) => category.id === rawPatch.categoryId);
+  const patch = categoryRemoved ? { ...rawPatch, categoryId: null } : rawPatch;
+  let changed = false;
+  const entries = state.entries.map((entry) => {
+    if (entry.id !== id) return entry;
+    changed = true;
+    return applyPatch(entry, patch);
+  });
+  return changed ? { ...state, entries } : state;
+}
+
+function applyToggleFavorite(state: EntriesState, id: string): EntriesState {
+  const entries = state.entries.map((entry) =>
+    entry.id === id ? { ...entry, isFavorite: !entry.isFavorite, updatedAt: Date.now() } : entry,
+  );
+  const changed = entries.some((entry, index) => entry !== state.entries[index]);
+  return changed ? { ...state, entries } : state;
+}
+
+function applyAddFollowUp(state: EntriesState, id: string, followUp: FollowUp): EntriesState {
+  let changed = false;
+  const entries = state.entries.map((entry) => {
+    if (entry.id !== id) return entry;
+    changed = true;
+    return { ...entry, followUps: [...(entry.followUps ?? []), followUp], updatedAt: Date.now() };
+  });
+  return changed ? { ...state, entries } : state;
+}
+
+function applyRecordView(state: EntriesState, id: string): EntriesState {
+  let changed = false;
+  const entries = state.entries.map((entry) => {
+    if (entry.id !== id) return entry;
+    changed = true;
+    return { ...entry, timesRediscovered: entry.timesRediscovered + 1, lastViewedAt: Date.now() };
+  });
+  return changed ? { ...state, entries } : state;
+}
+
+function applyDelete(state: EntriesState, id: string): EntriesState {
+  const entries = state.entries.filter((e) => e.id !== id);
+  return entries.length === state.entries.length ? state : { ...state, entries };
+}
+
+function applyAddCategories(state: EntriesState, incoming: Category[]): EntriesState {
+  const ids = new Set(state.categories.map((category) => category.id));
+  const names = new Set(state.categories.map((category) => category.name.toLowerCase()));
+  const additions = incoming.filter((category) => {
+    const name = category.name.toLowerCase();
+    if (ids.has(category.id) || names.has(name)) return false;
+    ids.add(category.id);
+    names.add(name);
+    return true;
+  });
+  return additions.length > 0 ? { ...state, categories: [...state.categories, ...additions] } : state;
+}
+
+function reconcileBackupCategories(
+  currentCategories: Category[],
+  backupCategories: Category[],
+): { additions: Category[]; remap: Map<string, string>; usedCategoryIds: Set<string> } {
+  const byName = new Map(currentCategories.map((c) => [c.name.toLowerCase(), c.id]));
+  const usedCategoryIds = new Set(currentCategories.map((category) => category.id));
+  const remap = new Map<string, string>();
+  const additions: Category[] = [];
+
+  for (const raw of backupCategories) {
+    const category = normalizeCategory(raw);
+    if (!category || remap.has(category.id)) continue;
+    const name = category.name;
+    const key = name.toLowerCase();
+    const localId = byName.get(key);
+    if (localId) {
+      remap.set(category.id, localId);
+    } else {
+      let targetId = category.id;
+      while (usedCategoryIds.has(targetId)) targetId = generateId();
+      usedCategoryIds.add(targetId);
+      byName.set(key, targetId);
+      remap.set(category.id, targetId);
+      additions.push({ id: targetId, name, createdAt: category.createdAt });
+    }
+  }
+  return { additions, remap, usedCategoryIds };
+}
+
+function reconcileBackupEntries(
+  currentEntries: Entry[],
+  backupEntries: Entry[],
+  remap: Map<string, string>,
+  usedCategoryIds: Set<string>,
+): Entry[] {
+  const existingIds = new Set(currentEntries.map((e) => e.id));
+  const fresh: Entry[] = [];
+  for (const raw of backupEntries) {
+    const entry = normalizeEntry(raw);
+    if (!entry || existingIds.has(entry.id)) continue;
+    existingIds.add(entry.id);
+    if (entry.categoryId) {
+      entry.categoryId = remap.get(entry.categoryId) ?? (usedCategoryIds.has(entry.categoryId) ? entry.categoryId : undefined);
+    }
+    fresh.push(entry);
+  }
+  return fresh;
+}
+
+function applyDeleteCategory(state: EntriesState, id: string): EntriesState {
+  const now = Date.now();
+  return {
+    ...state,
+    categories: state.categories.filter((c) => c.id !== id),
+    entries: state.entries.map((e) => (e.categoryId === id ? { ...e, categoryId: undefined, updatedAt: now } : e)),
+  };
+}
+
 function reducer(state: EntriesState, action: EntriesAction): EntriesState {
   switch (action.type) {
     case 'hydrate':
@@ -129,91 +272,25 @@ function reducer(state: EntriesState, action: EntriesAction): EntriesState {
       };
 
     case 'add':
-      if (state.entries.some((entry) => entry.id === action.entry.id)) return state;
-      return {
-        ...state,
-        entries: [
-          action.entry.categoryId &&
-          !state.categories.some((category) => category.id === action.entry.categoryId)
-            ? { ...action.entry, categoryId: undefined }
-            : action.entry,
-          ...state.entries,
-        ],
-      };
+      return applyAdd(state, action.entry);
 
-    case 'insert': {
-      const existing = new Set(state.entries.map((e) => e.id));
-      const categoryIds = new Set(state.categories.map((category) => category.id));
-      const fresh = action.entries.flatMap((entry) => {
-        if (existing.has(entry.id)) return [];
-        existing.add(entry.id);
-        return [
-          entry.categoryId && !categoryIds.has(entry.categoryId)
-            ? { ...entry, categoryId: undefined }
-            : entry,
-        ];
-      });
-      if (fresh.length === 0) return state;
-      return {
-        ...state,
-        entries: [...fresh, ...state.entries].sort((a, b) => b.createdAt - a.createdAt),
-      };
-    }
+    case 'insert':
+      return applyInsert(state, action.entries);
 
-    case 'update': {
-      let changed = false;
-      const patch =
-        typeof action.patch.categoryId === 'string' &&
-        !state.categories.some((category) => category.id === action.patch.categoryId)
-          ? { ...action.patch, categoryId: null }
-          : action.patch;
-      const entries = state.entries.map((entry) => {
-        if (entry.id !== action.id) return entry;
-        changed = true;
-        return applyPatch(entry, patch);
-      });
-      return changed ? { ...state, entries } : state;
-    }
+    case 'update':
+      return applyUpdate(state, action.id, action.patch);
 
-    case 'toggleFavorite': {
-      const entries = state.entries.map((entry) =>
-        entry.id === action.id
-          ? { ...entry, isFavorite: !entry.isFavorite, updatedAt: Date.now() }
-          : entry,
-      );
-      return entries.some((entry, index) => entry !== state.entries[index])
-        ? { ...state, entries }
-        : state;
-    }
+    case 'toggleFavorite':
+      return applyToggleFavorite(state, action.id);
 
-    case 'addFollowUp': {
-      let changed = false;
-      const entries = state.entries.map((entry) => {
-        if (entry.id !== action.id) return entry;
-        changed = true;
-        return {
-          ...entry,
-          followUps: [...(entry.followUps ?? []), action.followUp],
-          updatedAt: Date.now(),
-        };
-      });
-      return changed ? { ...state, entries } : state;
-    }
+    case 'addFollowUp':
+      return applyAddFollowUp(state, action.id, action.followUp);
 
-    case 'recordView': {
-      let changed = false;
-      const entries = state.entries.map((entry) => {
-        if (entry.id !== action.id) return entry;
-        changed = true;
-        return { ...entry, timesRediscovered: entry.timesRediscovered + 1, lastViewedAt: Date.now() };
-      });
-      return changed ? { ...state, entries } : state;
-    }
+    case 'recordView':
+      return applyRecordView(state, action.id);
 
-    case 'delete': {
-      const entries = state.entries.filter((e) => e.id !== action.id);
-      return entries.length === state.entries.length ? state : { ...state, entries };
-    }
+    case 'delete':
+      return applyDelete(state, action.id);
 
     case 'clear':
       // "Delete everything" means folders too, otherwise they linger in memory
@@ -228,20 +305,8 @@ function reducer(state: EntriesState, action: EntriesAction): EntriesState {
         categoriesPersistenceReady: true,
       };
 
-    case 'addCategories': {
-      const ids = new Set(state.categories.map((category) => category.id));
-      const names = new Set(state.categories.map((category) => category.name.toLowerCase()));
-      const additions = action.categories.filter((category) => {
-        const name = category.name.toLowerCase();
-        if (ids.has(category.id) || names.has(name)) return false;
-        ids.add(category.id);
-        names.add(name);
-        return true;
-      });
-      return additions.length > 0
-        ? { ...state, categories: [...state.categories, ...additions] }
-        : state;
-    }
+    case 'addCategories':
+      return applyAddCategories(state, action.categories);
 
     case 'renameCategory':
       return {
@@ -249,16 +314,8 @@ function reducer(state: EntriesState, action: EntriesAction): EntriesState {
         categories: state.categories.map((c) => (c.id === action.id ? { ...c, name: action.name } : c)),
       };
 
-    case 'deleteCategory': {
-      const now = Date.now();
-      return {
-        ...state,
-        categories: state.categories.filter((c) => c.id !== action.id),
-        entries: state.entries.map((e) =>
-          e.categoryId === action.id ? { ...e, categoryId: undefined, updatedAt: now } : e,
-        ),
-      };
-    }
+    case 'deleteCategory':
+      return applyDeleteCategory(state, action.id);
 
     default:
       return state;
@@ -295,7 +352,7 @@ export interface EntriesContextValue {
 
 const EntriesContext = createContext<EntriesContextValue | null>(null);
 
-export function EntriesProvider({ children }: { children: ReactNode }) {
+export function EntriesProvider({ children }: { readonly children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, INITIAL);
 
   /**
@@ -509,43 +566,10 @@ export function EntriesProvider({ children }: { children: ReactNode }) {
    */
   const restoreBackup = useCallback((backupEntries: Entry[], backupCategories: Category[]): number => {
     const current = stateRef.current;
-    const byName = new Map(current.categories.map((c) => [c.name.toLowerCase(), c.id]));
-    const usedCategoryIds = new Set(current.categories.map((category) => category.id));
-    const remap = new Map<string, string>();
-    const additions: Category[] = [];
-
-    for (const raw of backupCategories) {
-      const category = normalizeCategory(raw);
-      if (!category || remap.has(category.id)) continue;
-      const name = category.name;
-      const key = name.toLowerCase();
-      const localId = byName.get(key);
-      if (localId) {
-        remap.set(category.id, localId);
-      } else {
-        let targetId = category.id;
-        while (usedCategoryIds.has(targetId)) targetId = generateId();
-        usedCategoryIds.add(targetId);
-        byName.set(key, targetId);
-        remap.set(category.id, targetId);
-        additions.push({ id: targetId, name, createdAt: category.createdAt });
-      }
-    }
+    const { additions, remap, usedCategoryIds } = reconcileBackupCategories(current.categories, backupCategories);
     if (additions.length > 0) dispatch({ type: 'addCategories', categories: additions });
 
-    const existingIds = new Set(current.entries.map((e) => e.id));
-    const fresh: Entry[] = [];
-    for (const raw of backupEntries) {
-      const entry = normalizeEntry(raw);
-      if (!entry || existingIds.has(entry.id)) continue;
-      existingIds.add(entry.id);
-      if (entry.categoryId) {
-        entry.categoryId = remap.get(entry.categoryId) ??
-          (usedCategoryIds.has(entry.categoryId) ? entry.categoryId : undefined);
-      }
-      fresh.push(entry);
-    }
-
+    const fresh = reconcileBackupEntries(current.entries, backupEntries, remap, usedCategoryIds);
     if (fresh.length > 0) dispatch({ type: 'insert', entries: fresh });
     return fresh.length;
   }, []);

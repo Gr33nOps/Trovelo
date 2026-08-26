@@ -143,7 +143,7 @@ export async function flushPendingWrites(): Promise<void> {
   for (const key of pending.keys()) {
     if (!flushing.has(key)) void startFlush(key);
   }
-  await Promise.all([...flushing.values()]);
+  await Promise.all(flushing.values());
 }
 
 async function readJson<T>(key: string, legacyKey?: string): Promise<T | null> {
@@ -174,6 +174,22 @@ async function readJson<T>(key: string, legacyKey?: string): Promise<T | null> {
 
 function fallbackId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function numberOr<T>(value: unknown, fallback: T): number | T {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function normalizeEntryTags(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return Array.from(
+    new Set(
+      raw
+        .filter((tag): tag is string => typeof tag === 'string')
+        .map(normalizeTag)
+        .filter(Boolean),
+    ),
+  ).slice(0, MAX_TAGS_PER_ENTRY);
 }
 
 function normalizeFollowUps(raw: unknown): FollowUp[] | undefined {
@@ -209,7 +225,7 @@ export function normalizeEntry(raw: unknown): Entry | null {
   if (!text.trim()) return null;
 
   const now = Date.now();
-  const createdAt = typeof record.createdAt === 'number' && Number.isFinite(record.createdAt) ? record.createdAt : now;
+  const createdAt = numberOr(record.createdAt, now);
   const title = typeof record.title === 'string' && record.title.trim() ? record.title.trim() : undefined;
 
   return {
@@ -217,35 +233,15 @@ export function normalizeEntry(raw: unknown): Entry | null {
     title,
     text,
     createdAt,
-    updatedAt:
-      typeof record.updatedAt === 'number' && Number.isFinite(record.updatedAt) ? record.updatedAt : createdAt,
+    updatedAt: numberOr(record.updatedAt, createdAt),
     status: isEntryStatus(record.status) ? record.status : 'new',
     isFavorite: record.isFavorite === true,
-    tags: Array.isArray(record.tags)
-      ? Array.from(
-          new Set(
-            record.tags
-              .filter((tag): tag is string => typeof tag === 'string')
-              .map(normalizeTag)
-              .filter(Boolean),
-          ),
-        ).slice(0, MAX_TAGS_PER_ENTRY)
-      : [],
+    tags: normalizeEntryTags(record.tags),
     categoryId: typeof record.categoryId === 'string' && record.categoryId ? record.categoryId : undefined,
-    timesRediscovered:
-      typeof record.timesRediscovered === 'number' && Number.isFinite(record.timesRediscovered)
-        ? Math.max(0, Math.floor(record.timesRediscovered))
-        : 0,
-    lastViewedAt:
-      typeof record.lastViewedAt === 'number' && Number.isFinite(record.lastViewedAt)
-        ? record.lastViewedAt
-        : undefined,
-    remindAt:
-      typeof record.remindAt === 'number' && Number.isFinite(record.remindAt) ? record.remindAt : undefined,
-    archivedAt:
-      typeof record.archivedAt === 'number' && Number.isFinite(record.archivedAt)
-        ? record.archivedAt
-        : undefined,
+    timesRediscovered: Math.max(0, Math.floor(numberOr(record.timesRediscovered, 0))),
+    lastViewedAt: numberOr(record.lastViewedAt, undefined),
+    remindAt: numberOr(record.remindAt, undefined),
+    archivedAt: numberOr(record.archivedAt, undefined),
     isPinned: record.isPinned === true ? true : undefined,
     followUps: normalizeFollowUps(record.followUps),
   };
@@ -267,7 +263,7 @@ export function normalizeCategory(raw: unknown): Category | null {
 export async function loadEntries(): Promise<Entry[]> {
   const raw = await readJson<unknown>(ENTRIES_KEY, LEGACY.entries);
   if (raw === null) return [];
-  if (!Array.isArray(raw)) throw new Error('Stored entries are not an array.');
+  if (!Array.isArray(raw)) throw new TypeError('Stored entries are not an array.');
   const seen = new Set<string>();
   const entries: Entry[] = [];
   for (const item of raw) {
@@ -286,7 +282,7 @@ export function saveEntries(entries: Entry[]): Promise<void> {
 export async function loadCategories(): Promise<Category[]> {
   const raw = await readJson<unknown>(CATEGORIES_KEY, LEGACY.categories);
   if (raw === null) return [];
-  if (!Array.isArray(raw)) throw new Error('Stored categories are not an array.');
+  if (!Array.isArray(raw)) throw new TypeError('Stored categories are not an array.');
   const seen = new Set<string>();
   const categories: Category[] = [];
   for (const item of raw) {
@@ -306,7 +302,7 @@ export async function loadPreferences(): Promise<Preferences> {
   const raw = await readJson<unknown>(PREFS_KEY, LEGACY.prefs);
   if (raw === null) return { ...DEFAULT_PREFERENCES };
   if (typeof raw !== 'object' || Array.isArray(raw)) {
-    throw new Error('Stored preferences are not an object.');
+    throw new TypeError('Stored preferences are not an object.');
   }
   const prefs = raw as Record<string, unknown>;
   const number = (value: unknown, fallback: number) =>
@@ -330,7 +326,7 @@ export function savePreferences(prefs: Preferences): Promise<void> {
   return writeJson(PREFS_KEY, prefs);
 }
 
-export function loadSettingsRecord(): Promise<unknown | null> {
+export function loadSettingsRecord(): Promise<unknown> {
   return readJson<unknown>(SETTINGS_KEY, LEGACY.settings);
 }
 

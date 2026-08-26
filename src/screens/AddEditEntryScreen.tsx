@@ -11,6 +11,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useHaptics } from '../hooks/useHaptics';
 import { RootStackParamList } from '../navigation';
+import { Category } from '../types';
 import { Button } from '../ui/Button';
 import { Chip } from '../ui/Controls';
 import { Field } from '../ui/Field';
@@ -25,6 +26,114 @@ const MAX_TEXT_LENGTH = 4000;
 const MAX_TITLE_LENGTH = 90;
 /** The counter only earns its place on screen once the limit is actually close. */
 const COUNTER_THRESHOLD = 3500;
+
+function tagCountLabel(count: number): string {
+  return `${count} ${count === 1 ? 'tag' : 'tags'}`;
+}
+
+function EntryDetailsSection({
+  detailsOpen,
+  onToggle,
+  tags,
+  onChangeTags,
+  knownTags,
+  categoryId,
+  onChangeCategoryId,
+  folderLabel,
+  categories,
+  showNewFolder,
+  onToggleNewFolder,
+  newFolder,
+  onChangeNewFolder,
+  onCreateFolder,
+}: {
+  readonly detailsOpen: boolean;
+  readonly onToggle: () => void;
+  readonly tags: string[];
+  readonly onChangeTags: (tags: string[]) => void;
+  readonly knownTags: string[];
+  readonly categoryId: string | undefined;
+  readonly onChangeCategoryId: (categoryId: string | undefined) => void;
+  readonly folderLabel: string;
+  readonly categories: Category[];
+  readonly showNewFolder: boolean;
+  readonly onToggleNewFolder: () => void;
+  readonly newFolder: string;
+  readonly onChangeNewFolder: (value: string) => void;
+  readonly onCreateFolder: () => void;
+}) {
+  const { palette } = useTheme();
+  const collapsedSummary = !detailsOpen && (tags.length > 0 || categoryId);
+
+  return (
+    <>
+      <Pressable onPress={onToggle} style={styles.detailsToggle}>
+        <Type role="label" pressed>
+          {detailsOpen ? 'Hide details' : 'Add details'}
+        </Type>
+        <Ionicons name={detailsOpen ? 'chevron-up' : 'chevron-down'} size={14} color={palette.inkFaint} />
+        {collapsedSummary ? (
+          <Type role="caption" color={palette.inkFaint}>
+            {[tags.length > 0 ? tagCountLabel(tags.length) : null, categoryId ? folderLabel : null]
+              .filter(Boolean)
+              .join(' · ')}
+          </Type>
+        ) : null}
+      </Pressable>
+
+      {detailsOpen ? (
+        <>
+          <View style={styles.detailBlock}>
+            <Type role="label" pressed>
+              Tags
+            </Type>
+            <TagInput value={tags} onChange={onChangeTags} suggestions={knownTags} />
+          </View>
+
+          <View style={styles.detailBlock}>
+            <Type role="label" pressed>
+              Folder
+            </Type>
+            <View style={styles.chipRow}>
+              <Chip label="None" active={!categoryId} onPress={() => onChangeCategoryId(undefined)} />
+              {categories.map((category) => (
+                <Chip
+                  key={category.id}
+                  label={category.name}
+                  active={categoryId === category.id}
+                  onPress={() => onChangeCategoryId(category.id)}
+                />
+              ))}
+              <Chip label={showNewFolder ? 'Cancel' : 'New folder'} active={false} onPress={onToggleNewFolder} />
+            </View>
+
+            {showNewFolder ? (
+              <View style={styles.newFolderRow}>
+                <Field
+                  value={newFolder}
+                  onChangeText={onChangeNewFolder}
+                  placeholder="Folder name"
+                  maxLength={40}
+                  returnKeyType="done"
+                  onSubmitEditing={onCreateFolder}
+                  containerStyle={styles.grow}
+                  accessibilityLabel="New folder name"
+                />
+                <Button
+                  label="Create"
+                  size="md"
+                  variant="primary"
+                  disabled={newFolder.trim().length === 0}
+                  onPress={onCreateFolder}
+                />
+              </View>
+            ) : null}
+          </View>
+        </>
+      ) : null}
+    </>
+  );
+}
 
 export default function AddEditEntryScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
@@ -157,7 +266,6 @@ export default function AddEditEntryScreen({ navigation, route }: Props) {
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         <ScrollView
           contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xxl }]}
@@ -197,78 +305,22 @@ export default function AddEditEntryScreen({ navigation, route }: Props) {
             style={styles.polishButton}
           />
 
-          <Pressable onPress={() => setDetailsOpen((open) => !open)} style={styles.detailsToggle}>
-            <Type role="label" pressed>
-              {detailsOpen ? 'Hide details' : 'Add details'}
-            </Type>
-            <Ionicons
-              name={detailsOpen ? 'chevron-up' : 'chevron-down'}
-              size={14}
-              color={palette.inkFaint}
-            />
-            {!detailsOpen && (tags.length > 0 || categoryId) ? (
-              <Type role="caption" color={palette.inkFaint}>
-                {[tags.length > 0 ? `${tags.length} ${tags.length === 1 ? 'tag' : 'tags'}` : null, categoryId ? folderLabel : null]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </Type>
-            ) : null}
-          </Pressable>
-
-          {detailsOpen ? (
-            <>
-              <View style={styles.detailBlock}>
-                <Type role="label" pressed>
-                  Tags
-                </Type>
-                <TagInput value={tags} onChange={setTags} suggestions={knownTags.map((item) => item.tag)} />
-              </View>
-
-              <View style={styles.detailBlock}>
-                <Type role="label" pressed>
-                  Folder
-                </Type>
-                <View style={styles.chipRow}>
-                  <Chip label="None" active={!categoryId} onPress={() => setCategoryId(undefined)} />
-                  {categories.map((category) => (
-                    <Chip
-                      key={category.id}
-                      label={category.name}
-                      active={categoryId === category.id}
-                      onPress={() => setCategoryId(category.id)}
-                    />
-                  ))}
-                  <Chip
-                    label={showNewFolder ? 'Cancel' : 'New folder'}
-                    active={false}
-                    onPress={() => setShowNewFolder((open) => !open)}
-                  />
-                </View>
-
-                {showNewFolder ? (
-                  <View style={styles.newFolderRow}>
-                    <Field
-                      value={newFolder}
-                      onChangeText={setNewFolder}
-                      placeholder="Folder name"
-                      maxLength={40}
-                      returnKeyType="done"
-                      onSubmitEditing={createFolder}
-                      containerStyle={styles.grow}
-                      accessibilityLabel="New folder name"
-                    />
-                    <Button
-                      label="Create"
-                      size="md"
-                      variant="primary"
-                      disabled={newFolder.trim().length === 0}
-                      onPress={createFolder}
-                    />
-                  </View>
-                ) : null}
-              </View>
-            </>
-          ) : null}
+          <EntryDetailsSection
+            detailsOpen={detailsOpen}
+            onToggle={() => setDetailsOpen((open) => !open)}
+            tags={tags}
+            onChangeTags={setTags}
+            knownTags={knownTags.map((item) => item.tag)}
+            categoryId={categoryId}
+            onChangeCategoryId={setCategoryId}
+            folderLabel={folderLabel}
+            categories={categories}
+            showNewFolder={showNewFolder}
+            onToggleNewFolder={() => setShowNewFolder((open) => !open)}
+            newFolder={newFolder}
+            onChangeNewFolder={setNewFolder}
+            onCreateFolder={createFolder}
+          />
         </ScrollView>
       </KeyboardAvoidingView>
     </Backdrop>

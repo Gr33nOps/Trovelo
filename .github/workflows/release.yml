@@ -42,7 +42,12 @@ jobs:
       - name: Install dependencies
         # NODE_ENV is production for the release build, but lint/typecheck/test
         # tooling is intentionally kept in devDependencies and is required here.
-        run: npm ci --include=dev
+        # --ignore-scripts blocks arbitrary install-time code from third-party
+        # packages; the two dependencies that legitimately need a postinstall
+        # step (to fetch their native binary) are rebuilt explicitly after.
+        run: |
+          npm ci --include=dev --ignore-scripts
+          npm rebuild esbuild unrs-resolver
 
       - name: Verify tag and project metadata
         run: npm run verify:project

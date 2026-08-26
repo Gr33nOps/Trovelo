@@ -6,12 +6,12 @@ import { radius as radii, withAlpha } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 
 interface Props {
-  icon: keyof typeof Ionicons.glyphMap;
+  readonly icon: keyof typeof Ionicons.glyphMap;
   /** Defaults to the app accent. Pass `palette.danger` for a destructive row. */
-  tint?: string;
-  size?: number;
-  iconSize?: number;
-  style?: StyleProp<ViewStyle>;
+  readonly tint?: string;
+  readonly size?: number;
+  readonly iconSize?: number;
+  readonly style?: StyleProp<ViewStyle>;
 }
 
 /**
@@ -25,6 +25,7 @@ export function IconTile({ icon, tint, size = 38, iconSize, style }: Props) {
   const { palette } = useTheme();
   const color = tint ?? palette.inkSoft;
   const tinted = tint !== undefined;
+  const tintedAlpha = palette.mood === 'dark' ? 0.22 : 0.14;
 
   return (
     <View
@@ -34,9 +35,7 @@ export function IconTile({ icon, tint, size = 38, iconSize, style }: Props) {
           width: size,
           height: size,
           borderRadius: radii.md,
-          backgroundColor: tinted
-            ? withAlpha(color, palette.mood === 'dark' ? 0.22 : 0.14)
-            : withAlpha(palette.ink, 0.06),
+          backgroundColor: tinted ? withAlpha(color, tintedAlpha) : withAlpha(palette.ink, 0.06),
           borderColor: tinted ? withAlpha(color, 0.4) : 'transparent',
         },
         style,

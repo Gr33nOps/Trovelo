@@ -43,7 +43,7 @@ const CONTRACTIONS: Record<string, string> = {
 
 function matchCase(source: string, replacement: string): string {
   if (source === source.toUpperCase() && source !== source.toLowerCase()) return replacement.toUpperCase();
-  if (source[0] === source[0].toUpperCase()) return replacement[0].toUpperCase() + replacement.slice(1);
+  if (source.startsWith(source[0].toUpperCase())) return replacement[0].toUpperCase() + replacement.slice(1);
   return replacement;
 }
 
@@ -57,8 +57,7 @@ function expandContractions(text: string): string {
 function capitalizeSentences(text: string): string {
   let result = '';
   let capitalizeNext = true;
-  for (let i = 0; i < text.length; i += 1) {
-    const char = text[i];
+  for (const char of text) {
     if (capitalizeNext && /[a-z]/.test(char)) {
       result += char.toUpperCase();
       capitalizeNext = false;
@@ -79,10 +78,17 @@ export function fixGrammarAndStyle(text: string): string {
   result = result.replace(/[ \t]+/g, ' ');
   // At most one blank line between paragraphs.
   result = result.replace(/\n{3,}/g, '\n\n');
-  // Trim trailing spaces on each line.
-  result = result.replace(/[ \t]+$/gm, '');
-  // No space before a punctuation mark.
-  result = result.replace(/\s+([,.!?;:])/g, '$1');
+  // Trim trailing spaces on each line. split/trimEnd is immune to the
+  // super-linear backtracking a trailing "+$" regex can hit on adversarial
+  // input, and is simpler besides.
+  result = result
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .join('\n');
+  // No space before a punctuation mark. Bounded rather than "\s+" so a long
+  // run of whitespace can't force quadratic backtracking when it turns out
+  // not to be followed by punctuation at all.
+  result = result.replace(/\s{1,20}([,.!?;:])/g, '$1');
   // Exactly one space after a punctuation mark, when directly glued to the
   // next word. Only triggers before a letter, so numbers like "3.14" or
   // "1,000" and times like "3:30" are left alone.

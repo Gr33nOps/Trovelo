@@ -29,7 +29,12 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        # --ignore-scripts blocks arbitrary install-time code from third-party
+        # packages; the two dependencies that legitimately need a postinstall
+        # step (to fetch their native binary) are rebuilt explicitly after.
+        run: |
+          npm ci --ignore-scripts
+          npm rebuild esbuild unrs-resolver
 
       - name: Verify project metadata
         run: npm run verify:project
@@ -70,7 +75,12 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        # --ignore-scripts blocks arbitrary install-time code from third-party
+        # packages; the two dependencies that legitimately need a postinstall
+        # step (to fetch their native binary) are rebuilt explicitly after.
+        run: |
+          npm ci --ignore-scripts
+          npm rebuild esbuild unrs-resolver
 
       - name: Set up Java
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0

@@ -6,7 +6,7 @@ import { useTheme } from '../context/ThemeContext';
 import { EntryStatus } from '../types';
 import { Badge } from '../ui/Controls';
 
-export function StatusBadge({ status, compact = false }: { status: EntryStatus; compact?: boolean }) {
+export function StatusBadge({ status, compact = false }: { readonly status: EntryStatus; readonly compact?: boolean }) {
   const { palette } = useTheme();
   const config = STATUS_CONFIG[status];
   const color = palette.accent;

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import type { BottomTabBarButtonProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
@@ -28,6 +29,67 @@ function NewPlaceholder() {
 }
 
 const FAB_SIZE = 52;
+
+interface TabIconProps {
+  readonly color: string;
+  readonly focused: boolean;
+}
+
+/**
+ * A factory rather than an inline arrow per tab: React Navigation calls
+ * `tabBarIcon`/`tabBarLabel` as render props, but a function defined fresh
+ * on every `MainTabs` render is still a fresh identity every time, which
+ * defeats memoisation the same way an unstable nested component would.
+ * Calling the factory once at module load keeps each tab's renderer a
+ * single stable reference for the life of the app.
+ */
+function makeTabIcon(focusedName: keyof typeof Ionicons.glyphMap, unfocusedName: keyof typeof Ionicons.glyphMap) {
+  return function TabIcon({ color, focused }: TabIconProps) {
+    return <Ionicons name={focused ? focusedName : unfocusedName} size={22} color={color} />;
+  };
+}
+
+function makeTabLabel(label: string) {
+  return function TabLabelRenderer({ color, focused }: TabIconProps) {
+    return <TabLabel label={label} color={color} focused={focused} />;
+  };
+}
+
+const libraryTabIcon = makeTabIcon('cube', 'cube-outline');
+const surpriseTabIcon = makeTabIcon('shuffle', 'shuffle-outline');
+const settingsTabIcon = makeTabIcon('settings', 'settings-outline');
+
+const libraryTabLabel = makeTabLabel('Trovelo');
+const surpriseTabLabel = makeTabLabel('Surprise');
+const settingsTabLabel = makeTabLabel('Settings');
+const noTabLabel = () => null;
+
+/** The raised "+" compose button. A real component (not an inline render prop) since it needs live theme colours. */
+function ComposeTabButton({ onPress }: BottomTabBarButtonProps) {
+  const { palette } = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="Add a new idea"
+      hitSlop={8}
+      style={styles.fabSlot}
+    >
+      <View
+        style={[
+          styles.fab,
+          {
+            backgroundColor: palette.accent,
+            borderRadius: radii.pill,
+            shadowColor: palette.shadow,
+          },
+        ]}
+      >
+        <Ionicons name="add" size={26} color={palette.accentInk} />
+      </View>
+    </Pressable>
+  );
+}
 
 /** Trovelo · Surprise · (+) · Settings, each a destination except the raised compose button. Stats stays reachable. */
 export function MainTabs() {
@@ -64,20 +126,16 @@ export function MainTabs() {
         name="Library"
         component={LibraryScreen}
         options={{
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'cube' : 'cube-outline'} size={22} color={color} />
-          ),
-          tabBarLabel: ({ color, focused }) => <TabLabel label="Trovelo" color={color} focused={focused} />,
+          tabBarIcon: libraryTabIcon,
+          tabBarLabel: libraryTabLabel,
         }}
       />
       <Tab.Screen
         name="Home"
         component={HomeScreen}
         options={{
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'shuffle' : 'shuffle-outline'} size={22} color={color} />
-          ),
-          tabBarLabel: ({ color, focused }) => <TabLabel label="Surprise" color={color} focused={focused} />,
+          tabBarIcon: surpriseTabIcon,
+          tabBarLabel: surpriseTabLabel,
         }}
       />
       <Tab.Screen
@@ -91,39 +149,16 @@ export function MainTabs() {
           },
         })}
         options={{
-          tabBarLabel: () => null,
-          tabBarButton: (props) => (
-            <Pressable
-              onPress={props.onPress}
-              accessibilityRole="button"
-              accessibilityLabel="Add a new idea"
-              hitSlop={8}
-              style={styles.fabSlot}
-            >
-              <View
-                style={[
-                  styles.fab,
-                  {
-                    backgroundColor: palette.accent,
-                    borderRadius: radii.pill,
-                    shadowColor: palette.shadow,
-                  },
-                ]}
-              >
-                <Ionicons name="add" size={26} color={palette.accentInk} />
-              </View>
-            </Pressable>
-          ),
+          tabBarLabel: noTabLabel,
+          tabBarButton: ComposeTabButton,
         }}
       />
       <Tab.Screen
         name="Settings"
         component={SettingsScreen}
         options={{
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'settings' : 'settings-outline'} size={22} color={color} />
-          ),
-          tabBarLabel: ({ color, focused }) => <TabLabel label="Settings" color={color} focused={focused} />,
+          tabBarIcon: settingsTabIcon,
+          tabBarLabel: settingsTabLabel,
         }}
       />
       <Tab.Screen
@@ -138,7 +173,7 @@ export function MainTabs() {
   );
 }
 
-function TabLabel({ label, color, focused }: { label: string; color: string; focused: boolean }) {
+function TabLabel({ label, color, focused }: { readonly label: string; readonly color: string; readonly focused: boolean }) {
   return (
     <Type role="caption" color={color} numberOfLines={1} style={[styles.label, focused && styles.labelFocused]}>
       {label}

@@ -31,6 +31,24 @@ import { Type } from '../ui/Type';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Backup'>;
 
+function restoredCountMessage(added: number): string {
+  if (added === 0) return 'Everything in that backup was already here.';
+  return `${added} new ${added === 1 ? 'entry' : 'entries'} added.`;
+}
+
+function unlockErrorMessage(error: unknown): string {
+  if (error instanceof WrongPasswordError) return 'Wrong password. Check it and try again.';
+  if (error instanceof Error) return error.message;
+  return 'That backup could not be opened.';
+}
+
+function createBackupValidationError(missingConfirmation: boolean, mismatch: boolean, tooShort: boolean): string | null {
+  if (missingConfirmation) return 'Type the password again before creating the backup.';
+  if (mismatch) return 'The two passwords are not the same.';
+  if (tooShort) return 'Use at least 8 characters, or leave the password empty.';
+  return null;
+}
+
 export default function BackupScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const { palette } = useTheme();
@@ -73,16 +91,9 @@ export default function BackupScreen({ navigation }: Props) {
 
   const handleCreateBackup = async () => {
     if (busy) return;
-    if (missingConfirmation) {
-      toast.show({ message: 'Type the password again before creating the backup.', tone: 'warning' });
-      return;
-    }
-    if (mismatch) {
-      toast.show({ message: 'The two passwords are not the same.', tone: 'warning' });
-      return;
-    }
-    if (tooShort) {
-      toast.show({ message: 'Use at least 8 characters, or leave the password empty.', tone: 'warning' });
+    const validationError = createBackupValidationError(missingConfirmation, mismatch, tooShort);
+    if (validationError) {
+      toast.show({ message: validationError, tone: 'warning' });
       return;
     }
 
@@ -157,10 +168,7 @@ export default function BackupScreen({ navigation }: Props) {
             const added = restoreBackup(contents.entries, contents.categories);
             haptics.success();
             toast.show({
-              message:
-                added > 0
-                  ? `${added} new ${added === 1 ? 'entry' : 'entries'} added.`
-                  : 'Everything in that backup was already here.',
+              message: restoredCountMessage(added),
               tone: 'success',
             });
           },
@@ -213,12 +221,7 @@ export default function BackupScreen({ navigation }: Props) {
     } catch (error) {
       haptics.warning();
       toast.show({
-        message:
-          error instanceof WrongPasswordError
-            ? 'Wrong password. Check it and try again.'
-            : error instanceof Error
-              ? error.message
-              : 'That backup could not be opened.',
+        message: unlockErrorMessage(error),
         tone: 'warning',
       });
     } finally {

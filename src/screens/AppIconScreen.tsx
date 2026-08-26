@@ -20,6 +20,11 @@ import { Type } from '../ui/Type';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AppIcon'>;
 
+function optionOpacity(disabled: boolean, selected: boolean, pressed: boolean): number {
+  if (disabled && !selected) return 0.5;
+  return pressed ? 0.7 : 1;
+}
+
 export default function AppIconScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const { palette } = useTheme();
@@ -47,10 +52,10 @@ export default function AppIconScreen({ navigation }: Props) {
       refresh();
       haptics.success();
       toast.show({ message: 'App icon changed. Check your home screen.', tone: 'success' });
-    } catch (caught) {
+    } catch (error) {
       haptics.warning();
       toast.show({
-        message: caught instanceof Error ? caught.message : 'The app icon could not be changed.',
+        message: error instanceof Error ? error.message : 'The app icon could not be changed.',
         tone: 'warning',
       });
     } finally {
@@ -102,8 +107,6 @@ export default function AppIconScreen({ navigation }: Props) {
               <View style={styles.swatchRow}>
                 <IconOption
                   label="Light"
-                  accentId={accentId}
-                  isDark={false}
                   accentColor={def.light}
                   background={palettes.light.backdrop}
                   borderColor={palettes.light.edge}
@@ -113,8 +116,6 @@ export default function AppIconScreen({ navigation }: Props) {
                 />
                 <IconOption
                   label="Dark"
-                  accentId={accentId}
-                  isDark
                   accentColor={def.dark}
                   background={palettes.dark.backdrop}
                   borderColor={palettes.dark.edge}
@@ -140,15 +141,13 @@ function IconOption({
   disabled,
   onPress,
 }: {
-  label: string;
-  accentId: AccentId;
-  isDark: boolean;
-  accentColor: string;
-  background: string;
-  borderColor: string;
-  selected: boolean;
-  disabled: boolean;
-  onPress: () => void;
+  readonly label: string;
+  readonly accentColor: string;
+  readonly background: string;
+  readonly borderColor: string;
+  readonly selected: boolean;
+  readonly disabled: boolean;
+  readonly onPress: () => void;
 }) {
   const { palette } = useTheme();
   return (
@@ -158,7 +157,7 @@ function IconOption({
       accessibilityRole="radio"
       accessibilityState={{ selected, disabled }}
       accessibilityLabel={`${label} icon`}
-      style={({ pressed }) => [styles.option, { opacity: disabled && !selected ? 0.5 : pressed ? 0.7 : 1 }]}
+      style={({ pressed }) => [styles.option, { opacity: optionOpacity(disabled, selected, pressed) }]}
     >
       <View
         style={[

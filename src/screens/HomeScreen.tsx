@@ -118,6 +118,59 @@ export default function HomeScreen({ navigation }: Props) {
     surprise();
   };
 
+  let mainContent: React.ReactNode;
+  if (entries.length === 0) {
+    mainContent = (
+      <EmptyState
+        icon="cube-outline"
+        title="Your box is empty"
+        subtitle="Add an idea, then come back for a surprise."
+        actionLabel="Add"
+        onAction={() => navigation.navigate('EntryEdit')}
+      />
+    );
+  } else if (revealed) {
+    mainContent = (
+      <View style={styles.reveal}>
+        <SurpriseCard entry={revealed} folderName={folderName} />
+
+        <View style={styles.revealToolbar}>
+          <Pressable
+            onPress={surprise}
+            hitSlop={HIT_SLOP}
+            accessibilityRole="button"
+            accessibilityLabel="Show me another"
+          >
+            <Type role="body" color={palette.inkSoft} style={styles.another}>
+              Show me another
+            </Type>
+          </Pressable>
+          <IconButton
+            icon="ellipsis-horizontal"
+            label="More actions"
+            onPress={() => {
+              haptics.medium();
+              setMoreOpen(true);
+            }}
+          />
+        </View>
+
+        <View style={styles.actions}>
+          <StatusPicker value={revealed.status} onChange={handleStatus} hideNew />
+        </View>
+      </View>
+    );
+  } else {
+    mainContent = (
+      <View style={styles.idle}>
+        <Type role="title" align="center">
+          Ready when you are
+        </Type>
+        <Button label="SURPRISE ME" onPress={surprise} variant="outline" size="lg" fullWidth haptic="medium" />
+      </View>
+    );
+  }
+
   return (
     <Backdrop>
       <ScrollView
@@ -146,51 +199,7 @@ export default function HomeScreen({ navigation }: Props) {
           </View>
         ) : null}
 
-        {entries.length === 0 ? (
-          <EmptyState
-            icon="cube-outline"
-            title="Your box is empty"
-            subtitle="Add an idea, then come back for a surprise."
-            actionLabel="Add"
-            onAction={() => navigation.navigate('EntryEdit')}
-          />
-        ) : revealed ? (
-          <View style={styles.reveal}>
-            <SurpriseCard entry={revealed} folderName={folderName} />
-
-            <View style={styles.revealToolbar}>
-              <Pressable
-                onPress={surprise}
-                hitSlop={HIT_SLOP}
-                accessibilityRole="button"
-                accessibilityLabel="Show me another"
-              >
-                <Type role="body" color={palette.inkSoft} style={styles.another}>
-                  Show me another
-                </Type>
-              </Pressable>
-              <IconButton
-                icon="ellipsis-horizontal"
-                label="More actions"
-                onPress={() => {
-                  haptics.medium();
-                  setMoreOpen(true);
-                }}
-              />
-            </View>
-
-            <View style={styles.actions}>
-              <StatusPicker value={revealed.status} onChange={handleStatus} hideNew />
-            </View>
-          </View>
-        ) : (
-          <View style={styles.idle}>
-            <Type role="title" align="center">
-              Ready when you are
-            </Type>
-            <Button label="SURPRISE ME" onPress={surprise} variant="outline" size="lg" fullWidth haptic="medium" />
-          </View>
-        )}
+        {mainContent}
 
         {reminders.length > 0 ? (
           <View style={styles.section}>

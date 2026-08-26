@@ -139,7 +139,7 @@ export const DEFAULT_ACCENT_ID: AccentId = 'gold';
 function shade(hex: string, amount: number): string {
   const full = hex.replace('#', '');
   const channel = (i: number) =>
-    Math.max(0, Math.min(255, Math.round(parseInt(full.slice(i, i + 2), 16) * (1 - amount))))
+    Math.max(0, Math.min(255, Math.round(Number.parseInt(full.slice(i, i + 2), 16) * (1 - amount))))
       .toString(16)
       .padStart(2, '0');
   return `#${channel(0)}${channel(2)}${channel(4)}`;
@@ -236,9 +236,9 @@ export function withAlpha(color: string, alpha: number): string {
   const hex = color.slice(1);
   const full = hex.length === 3 ? hex.replace(/./g, (c) => c + c) : hex;
   if (full.length < 6) return color;
-  const r = parseInt(full.slice(0, 2), 16);
-  const g = parseInt(full.slice(2, 4), 16);
-  const b = parseInt(full.slice(4, 6), 16);
+  const r = Number.parseInt(full.slice(0, 2), 16);
+  const g = Number.parseInt(full.slice(2, 4), 16);
+  const b = Number.parseInt(full.slice(4, 6), 16);
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
@@ -246,7 +246,7 @@ function luminance(hex: string): number {
   const value = hex.replace('#', '');
   const full = value.length === 3 ? value.replace(/./g, (c) => c + c) : value;
   const channel = (i: number) => {
-    const c = parseInt(full.slice(i, i + 2), 16) / 255;
+    const c = Number.parseInt(full.slice(i, i + 2), 16) / 255;
     return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
   };
   return 0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4);

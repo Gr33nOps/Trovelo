@@ -15,18 +15,18 @@ import { Well } from './Surface';
 import { Type } from './Type';
 
 export interface FieldProps extends Omit<TextInputProps, 'style'> {
-  label?: string;
-  hint?: string;
+  readonly label?: string;
+  readonly hint?: string;
   /** Rendered under the field in the danger colour; also sets the a11y invalid state. */
-  error?: string;
+  readonly error?: string;
   /** Shows `n / max` under the field. Requires `maxLength`. */
-  showCounter?: boolean;
-  left?: ReactNode;
-  right?: ReactNode;
-  containerStyle?: StyleProp<ViewStyle>;
-  inputStyle?: StyleProp<TextStyle>;
+  readonly showCounter?: boolean;
+  readonly left?: ReactNode;
+  readonly right?: ReactNode;
+  readonly containerStyle?: StyleProp<ViewStyle>;
+  readonly inputStyle?: StyleProp<TextStyle>;
   /** `plain` drops the recessed well for editorial screens. */
-  variant?: 'well' | 'plain';
+  readonly variant?: 'well' | 'plain';
 }
 
 /**

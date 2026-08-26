@@ -6,13 +6,14 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { StatusBadge } from '../components/StatusBadge';
 import { StatusPicker } from '../components/StatusPicker';
-import { PAGE_PAD, radius as radii, spacing, withAlpha } from '../constants/theme';
+import { PAGE_PAD, Palette, radius as radii, spacing, withAlpha } from '../constants/theme';
 import { useEntries } from '../context/EntriesContext';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useHaptics } from '../hooks/useHaptics';
 import { RootStackParamList } from '../navigation';
-import { ActionSheet } from '../ui/ActionSheet';
+import { Entry } from '../types';
+import { ActionSheet, ActionSheetItem } from '../ui/ActionSheet';
 import { Button } from '../ui/Button';
 import { Field } from '../ui/Field';
 import { EmptyState } from '../ui/EmptyState';
@@ -26,6 +27,58 @@ import { displayTag } from '../utils/tags';
 const DAY_MS = 86_400_000;
 
 type Props = NativeStackScreenProps<RootStackParamList, 'EntryDetail'>;
+
+function EntryMeta({ entry, palette }: { readonly entry: Entry; readonly palette: Palette }) {
+  return (
+    <View style={[styles.meta, { borderTopColor: palette.edge }]}>
+      <View style={styles.metaColumn}>
+        <Type role="label" pressed>
+          Saved
+        </Type>
+        <Type role="caption">{formatDate(entry.createdAt)}</Type>
+      </View>
+      {entry.isPinned || entry.archivedAt ? (
+        <View style={styles.metaColumn}>
+          <Type role="label" pressed>
+            {entry.archivedAt ? 'Archived' : 'Pinned'}
+          </Type>
+          <Type role="caption">{entry.archivedAt ? formatDate(entry.archivedAt) : 'At the top of your library'}</Type>
+        </View>
+      ) : null}
+      {entry.lastViewedAt ? (
+        <View style={styles.metaColumn}>
+          <Type role="label" pressed>
+            Last seen
+          </Type>
+          <Type role="caption">{formatRelativeDay(entry.lastViewedAt)}</Type>
+        </View>
+      ) : null}
+      <View style={styles.metaColumn}>
+        <Type role="label" pressed>
+          Rediscovered
+        </Type>
+        <Type role="caption">
+          {entry.timesRediscovered} {entry.timesRediscovered === 1 ? 'time' : 'times'}
+        </Type>
+      </View>
+    </View>
+  );
+}
+
+function buildMoreActions(
+  entry: Entry,
+  handlers: {
+    readonly onTogglePin: () => void;
+    readonly onRemindLater: () => void;
+    readonly onToggleArchive: () => void;
+  },
+): ActionSheetItem[] {
+  return [
+    { label: entry.isPinned ? 'Unpin' : 'Pin to top of library', onPress: handlers.onTogglePin },
+    { label: 'Remind me later', onPress: handlers.onRemindLater },
+    { label: entry.archivedAt ? 'Unarchive' : 'Archive', onPress: handlers.onToggleArchive },
+  ];
+}
 
 export default function EntryDetailScreen({ navigation, route }: Props) {
   const { entryId } = route.params;
@@ -188,38 +241,7 @@ export default function EntryDetailScreen({ navigation, route }: Props) {
             </View>
           ) : null}
 
-          <View style={[styles.meta, { borderTopColor: palette.edge }]}>
-            <View style={styles.metaColumn}>
-              <Type role="label" pressed>
-                Saved
-              </Type>
-              <Type role="caption">{formatDate(entry.createdAt)}</Type>
-            </View>
-            {entry.isPinned || entry.archivedAt ? (
-              <View style={styles.metaColumn}>
-                <Type role="label" pressed>
-                  {entry.archivedAt ? 'Archived' : 'Pinned'}
-                </Type>
-                <Type role="caption">{entry.archivedAt ? formatDate(entry.archivedAt) : 'At the top of your library'}</Type>
-              </View>
-            ) : null}
-            {entry.lastViewedAt ? (
-              <View style={styles.metaColumn}>
-                <Type role="label" pressed>
-                  Last seen
-                </Type>
-                <Type role="caption">{formatRelativeDay(entry.lastViewedAt)}</Type>
-              </View>
-            ) : null}
-            <View style={styles.metaColumn}>
-              <Type role="label" pressed>
-                Rediscovered
-              </Type>
-              <Type role="caption">
-                {entry.timesRediscovered} {entry.timesRediscovered === 1 ? 'time' : 'times'}
-              </Type>
-            </View>
-          </View>
+          <EntryMeta entry={entry} palette={palette} />
         </View>
 
         <Panel style={styles.card} borderRadius={radii.lg}>
@@ -349,22 +371,16 @@ export default function EntryDetailScreen({ navigation, route }: Props) {
         visible={moreOpen}
         title={entry.title ?? 'This idea'}
         onClose={() => setMoreOpen(false)}
-        actions={[
-          {
-            label: entry.isPinned ? 'Unpin' : 'Pin to top of library',
-            onPress: () => updateEntry(entry.id, { isPinned: !entry.isPinned }),
+        actions={buildMoreActions(entry, {
+          onTogglePin: () => updateEntry(entry.id, { isPinned: !entry.isPinned }),
+          onRemindLater: showRemindOptions,
+          onToggleArchive: () => {
+            updateEntry(entry.id, { archivedAt: entry.archivedAt ? null : Date.now() });
+            toast.show({
+              message: entry.archivedAt ? 'Unarchived.' : 'Archived. Find it under the Archived filter.',
+            });
           },
-          { label: 'Remind me later', onPress: showRemindOptions },
-          {
-            label: entry.archivedAt ? 'Unarchive' : 'Archive',
-            onPress: () => {
-              updateEntry(entry.id, { archivedAt: entry.archivedAt ? null : Date.now() });
-              toast.show({
-                message: entry.archivedAt ? 'Unarchived.' : 'Archived. Find it under the Archived filter.',
-              });
-            },
-          },
-        ]}
+        })}
       />
       <ActionSheet
         visible={reminderOpen}

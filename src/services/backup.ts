@@ -115,18 +115,15 @@ function cachePath(fileName: string): string {
 function serializedBytes(value: string): number {
   let bytes = 0;
   for (let index = 0; index < value.length; index += 1) {
-    const code = value.charCodeAt(index);
+    // A supplementary-plane code point spans a surrogate pair (two UTF-16
+    // units); codePointAt combines the pair for us, so skip the low
+    // surrogate we've already accounted for.
+    const code = value.codePointAt(index)!;
+    if (code > 0xffff) index += 1;
     if (code < 0x80) bytes += 1;
     else if (code < 0x800) bytes += 2;
-    else if (code >= 0xd800 && code <= 0xdbff && index + 1 < value.length) {
-      const next = value.charCodeAt(index + 1);
-      if (next >= 0xdc00 && next <= 0xdfff) {
-        bytes += 4;
-        index += 1;
-      } else {
-        bytes += 3;
-      }
-    } else bytes += 3;
+    else if (code < 0x10000) bytes += 3;
+    else bytes += 4;
     if (bytes > MAX_BACKUP_BYTES) return bytes;
   }
   return bytes;
@@ -219,15 +216,10 @@ interface BackupFileV2 {
   data: string;
 }
 
-function sanitizeInner(raw: unknown): BackupContents {
-  if (typeof raw !== 'object' || raw === null) {
-    throw new Error('That backup could not be read.');
-  }
-  const obj = raw as Record<string, unknown>;
+function validateBackupShape(obj: Record<string, unknown>): void {
   if (obj.app !== INNER_APP && obj.app !== LEGACY_INNER_APP) {
     throw new Error('That file is not a Trovelo backup.');
   }
-
   if (obj.app === INNER_APP && obj.version !== BACKUP_VERSION) {
     if (typeof obj.version === 'number' && obj.version > BACKUP_VERSION) {
       throw new Error('This backup was made by a newer version of Trovelo. Update the app and try again.');
@@ -243,54 +235,65 @@ function sanitizeInner(raw: unknown): BackupContents {
   }
   if (!Array.isArray(obj.entries)) throw new DamagedBackupError();
   if (obj.app === INNER_APP && !Array.isArray(obj.categories)) throw new DamagedBackupError();
-  if (
-    obj.app === INNER_APP &&
-    (typeof obj.createdAt !== 'number' || !Number.isFinite(obj.createdAt))
-  ) {
+  if (obj.app === INNER_APP && (typeof obj.createdAt !== 'number' || !Number.isFinite(obj.createdAt))) {
     throw new DamagedBackupError();
   }
+}
 
+function sanitizeEntries(rawEntries: unknown[]): Entry[] {
   const entryIds = new Set<string>();
   const entries: Entry[] = [];
-  for (const rawEntry of obj.entries) {
+  for (const rawEntry of rawEntries) {
     const entry = normalizeEntry(rawEntry);
     if (!entry || entryIds.has(entry.id)) continue;
     entryIds.add(entry.id);
     entries.push(entry);
   }
+  return entries;
+}
 
+function sanitizeCategories(rawCategories: unknown): Category[] {
   const categoryIds = new Set<string>();
   const categories: Category[] = [];
-  if (Array.isArray(obj.categories)) {
-    for (const rawCategory of obj.categories) {
+  if (Array.isArray(rawCategories)) {
+    for (const rawCategory of rawCategories) {
       const category = normalizeCategory(rawCategory);
       if (!category || categoryIds.has(category.id)) continue;
       categoryIds.add(category.id);
       categories.push(category);
     }
   }
+  return categories;
+}
 
-  let preferences: Preferences | undefined;
-  const p = obj.preferences as Record<string, unknown> | undefined;
-  if (p && (p.themeMode === 'system' || p.themeMode === 'light' || p.themeMode === 'dark')) {
-    const num = (value: unknown) =>
-      typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
-    const streak = num(p.streak);
-    preferences = {
-      themeMode: p.themeMode,
-      accentId: isAccentId(p.accentId) ? p.accentId : DEFAULT_ACCENT_ID,
-      streak,
-      lastOpenDay: typeof p.lastOpenDay === 'string' ? p.lastOpenDay : null,
-      bestStreak: Math.max(streak, num(p.bestStreak)),
-      daysOpened: num(p.daysOpened),
-      onboarded: p.onboarded === true,
-    };
+function sanitizePreferences(raw: unknown): Preferences | undefined {
+  const p = raw as Record<string, unknown> | undefined;
+  if (!p || (p.themeMode !== 'system' && p.themeMode !== 'light' && p.themeMode !== 'dark')) return undefined;
+  const num = (value: unknown) =>
+    typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+  const streak = num(p.streak);
+  return {
+    themeMode: p.themeMode,
+    accentId: isAccentId(p.accentId) ? p.accentId : DEFAULT_ACCENT_ID,
+    streak,
+    lastOpenDay: typeof p.lastOpenDay === 'string' ? p.lastOpenDay : null,
+    bestStreak: Math.max(streak, num(p.bestStreak)),
+    daysOpened: num(p.daysOpened),
+    onboarded: p.onboarded === true,
+  };
+}
+
+function sanitizeInner(raw: unknown): BackupContents {
+  if (typeof raw !== 'object' || raw === null) {
+    throw new Error('That backup could not be read.');
   }
+  const obj = raw as Record<string, unknown>;
+  validateBackupShape(obj);
 
   return {
-    entries,
-    categories,
-    preferences,
+    entries: sanitizeEntries(obj.entries as unknown[]),
+    categories: sanitizeCategories(obj.categories),
+    preferences: sanitizePreferences(obj.preferences),
     createdAt:
       typeof obj.createdAt === 'number' && Number.isFinite(obj.createdAt) ? obj.createdAt : undefined,
   };
@@ -411,6 +414,23 @@ async function knownFileSize(uri: string): Promise<number | null> {
   }
 }
 
+async function readBackupContent(
+  uri: string,
+  originalSize: number | null,
+  copyToCheckedScratch: () => Promise<string>,
+): Promise<string> {
+  // A content provider may not expose metadata. Copying first gives us a
+  // real file whose size can be enforced before any JSON reaches memory.
+  let source = originalSize === null || uri.startsWith('content:') ? await copyToCheckedScratch() : uri;
+  try {
+    return await FileSystem.readAsStringAsync(source);
+  } catch {
+    if (source !== uri) throw new DamagedBackupError('That backup could not be read.');
+    source = await copyToCheckedScratch();
+    return await FileSystem.readAsStringAsync(source);
+  }
+}
+
 export async function openBackupFile(uri: string, options: OpenBackupOptions = {}): Promise<BackupContents> {
   const { password, onProgress } = options;
   if (password && password.length > MAX_PASSWORD_LENGTH) {
@@ -435,27 +455,20 @@ export async function openBackupFile(uri: string, options: OpenBackupOptions = {
   try {
     const originalSize = await knownFileSize(uri);
     if (originalSize !== null) assertBackupSize(originalSize);
-    let source = uri;
-    if (originalSize === null || uri.startsWith('content:')) {
-      // A content provider may not expose metadata. Copying first gives us a
-      // real file whose size can be enforced before any JSON reaches memory.
-      source = await copyToCheckedScratch();
-    }
-
-    let content: string;
-    try {
-      content = await FileSystem.readAsStringAsync(source);
-    } catch {
-      if (source !== uri) throw new DamagedBackupError('That backup could not be read.');
-      source = await copyToCheckedScratch();
-      content = await FileSystem.readAsStringAsync(source);
-    }
+    const content = await readBackupContent(uri, originalSize, copyToCheckedScratch);
     // Also protect platforms that report an inaccurate file size.
     assertBackupSize(serializedBytes(content));
     return await parseBackup(content, password, onProgress);
   } finally {
     if (scratch) await FileSystem.deleteAsync(scratch, { idempotent: true }).catch(() => {});
   }
+}
+
+/** A pre-rename file with no `version` field at all is implicitly v1. */
+function resolveBackupVersion(file: Record<string, unknown>): number | null {
+  if (file.app === LEGACY_APP && file.version === undefined) return 1;
+  if (typeof file.version === 'number' && Number.isInteger(file.version)) return file.version;
+  return null;
 }
 
 async function parseBackup(
@@ -476,12 +489,7 @@ async function parseBackup(
   const file = parsed as Record<string, unknown>;
 
   if (file.app === BACKUP_APP || file.app === LEGACY_APP) {
-    const version =
-      file.app === LEGACY_APP && file.version === undefined
-        ? 1
-        : typeof file.version === 'number' && Number.isInteger(file.version)
-          ? file.version
-          : null;
+    const version = resolveBackupVersion(file);
     if (
       version === null ||
       version < 1 ||
@@ -527,66 +535,70 @@ function parseLegacyDecryptedJson(json: string): unknown {
   }
 }
 
-async function decrypt(
+async function decryptV2(
   file: Record<string, unknown>,
   version: number,
+  data: string,
+  ivB64: string,
   password: string,
   onProgress?: (fraction: number) => void,
 ): Promise<string> {
-  const data = typeof file.data === 'string' ? file.data : '';
-  const ivB64 = typeof file.iv === 'string' ? file.iv : '';
-  if (!data || !ivB64) throw new DamagedBackupError();
-
-  if (version === 2) {
-    if (file.cipher !== 'AES-256-CBC') throw new DamagedBackupError();
-    if (typeof file.kdf !== 'object' || file.kdf === null || Array.isArray(file.kdf)) {
-      throw new DamagedBackupError();
-    }
-    const kdf = file.kdf as { algo?: unknown; iterations?: unknown; salt?: unknown };
-    if (kdf.algo !== 'PBKDF2-SHA256') throw new DamagedBackupError();
-    const saltB64 = typeof kdf?.salt === 'string' ? kdf.salt : '';
-    const iterations = kdf.iterations;
-    if (
-      typeof iterations !== 'number' ||
-      !Number.isInteger(iterations) ||
-      iterations < MIN_PBKDF2_ITERATIONS ||
-      iterations > MAX_PBKDF2_ITERATIONS
-    ) {
-      throw new DamagedBackupError();
-    }
-
-    const salt = decodeBase64(saltB64, SALT_BYTES);
-    const iv = decodeBase64(ivB64, IV_BYTES);
-    const ciphertext = decodeBase64(data);
-    if (ciphertext.sigBytes === 0 || ciphertext.sigBytes % IV_BYTES !== 0) {
-      throw new DamagedBackupError();
-    }
-    const expectedMac = typeof file.mac === 'string' ? file.mac : '';
-    decodeBase64(expectedMac, MAC_BYTES);
-
-    const material = await deriveKey(password, salt, iterations, KEY_BYTES + MAC_BYTES, onProgress);
-    const { encKey, macKey } = splitKey(material);
-
-    if (!expectedMac || !macEquals(expectedMac, computeMac(macKey, version, saltB64, ivB64, data))) {
-      // Either the password is wrong or the file was altered. Both mean stop.
-      throw new WrongPasswordError();
-    }
-
-    let text: string;
-    try {
-      const decrypted = CryptoJS.AES.decrypt(
-        CryptoJS.lib.CipherParams.create({ ciphertext }),
-        encKey,
-        { iv, mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.Pkcs7 },
-      );
-      text = decrypted.toString(CryptoJS.enc.Utf8);
-    } catch {
-      throw new DamagedBackupError();
-    }
-    if (!text) throw new DamagedBackupError();
-    return text;
+  if (file.cipher !== 'AES-256-CBC') throw new DamagedBackupError();
+  if (typeof file.kdf !== 'object' || file.kdf === null || Array.isArray(file.kdf)) {
+    throw new DamagedBackupError();
+  }
+  const kdf = file.kdf as { algo?: unknown; iterations?: unknown; salt?: unknown };
+  if (kdf.algo !== 'PBKDF2-SHA256') throw new DamagedBackupError();
+  const saltB64 = typeof kdf?.salt === 'string' ? kdf.salt : '';
+  const iterations = kdf.iterations;
+  if (
+    typeof iterations !== 'number' ||
+    !Number.isInteger(iterations) ||
+    iterations < MIN_PBKDF2_ITERATIONS ||
+    iterations > MAX_PBKDF2_ITERATIONS
+  ) {
+    throw new DamagedBackupError();
   }
 
+  const salt = decodeBase64(saltB64, SALT_BYTES);
+  const iv = decodeBase64(ivB64, IV_BYTES);
+  const ciphertext = decodeBase64(data);
+  if (ciphertext.sigBytes === 0 || ciphertext.sigBytes % IV_BYTES !== 0) {
+    throw new DamagedBackupError();
+  }
+  const expectedMac = typeof file.mac === 'string' ? file.mac : '';
+  decodeBase64(expectedMac, MAC_BYTES);
+
+  const material = await deriveKey(password, salt, iterations, KEY_BYTES + MAC_BYTES, onProgress);
+  const { encKey, macKey } = splitKey(material);
+
+  if (!expectedMac || !macEquals(expectedMac, computeMac(macKey, version, saltB64, ivB64, data))) {
+    // Either the password is wrong or the file was altered. Both mean stop.
+    throw new WrongPasswordError();
+  }
+
+  let text: string;
+  try {
+    const decrypted = CryptoJS.AES.decrypt(
+      CryptoJS.lib.CipherParams.create({ ciphertext }),
+      encKey,
+      { iv, mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.Pkcs7 },
+    );
+    text = decrypted.toString(CryptoJS.enc.Utf8);
+  } catch {
+    throw new DamagedBackupError();
+  }
+  if (!text) throw new DamagedBackupError();
+  return text;
+}
+
+async function decryptV1(
+  file: Record<string, unknown>,
+  data: string,
+  ivB64: string,
+  password: string,
+  onProgress?: (fraction: number) => void,
+): Promise<string> {
   // v1: PBKDF2-HMAC-SHA1, 10k iterations, OpenSSL-serialised ciphertext.
   const saltB64 = typeof file.salt === 'string' ? file.salt : '';
   if (!saltB64) throw new DamagedBackupError();
@@ -607,6 +619,20 @@ async function decrypt(
   }
   if (!text) throw new WrongPasswordError();
   return text;
+}
+
+async function decrypt(
+  file: Record<string, unknown>,
+  version: number,
+  password: string,
+  onProgress?: (fraction: number) => void,
+): Promise<string> {
+  const data = typeof file.data === 'string' ? file.data : '';
+  const ivB64 = typeof file.iv === 'string' ? file.iv : '';
+  if (!data || !ivB64) throw new DamagedBackupError();
+
+  if (version === 2) return decryptV2(file, version, data, ivB64, password, onProgress);
+  return decryptV1(file, data, ivB64, password, onProgress);
 }
 
 /* --------------------------------------------------------- plain export -- */

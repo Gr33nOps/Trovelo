@@ -8,13 +8,13 @@ import { Button } from './Button';
 import { Type } from './Type';
 
 interface Props {
-  icon?: keyof typeof Ionicons.glyphMap;
-  title: string;
-  subtitle?: string;
-  actionLabel?: string;
-  onAction?: () => void;
-  secondaryLabel?: string;
-  onSecondary?: () => void;
+  readonly icon?: keyof typeof Ionicons.glyphMap;
+  readonly title: string;
+  readonly subtitle?: string;
+  readonly actionLabel?: string;
+  readonly onAction?: () => void;
+  readonly secondaryLabel?: string;
+  readonly onSecondary?: () => void;
 }
 
 /** Minimal empty state — optional icon, title, subtitle and focused actions. */

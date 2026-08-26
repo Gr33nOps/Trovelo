@@ -18,14 +18,14 @@ import { Type } from './Type';
 /* ------------------------------------------------------------------ Chip -- */
 
 export interface ChipProps {
-  label: string;
-  active?: boolean;
-  onPress: () => void;
+  readonly label: string;
+  readonly active?: boolean;
+  readonly onPress: () => void;
   /** Fill colour when active. Ink is chosen automatically for contrast. */
-  color?: string;
-  icon?: ReactNode;
-  count?: number;
-  accessibilityHint?: string;
+  readonly color?: string;
+  readonly icon?: ReactNode;
+  readonly count?: number;
+  readonly accessibilityHint?: string;
 }
 
 /** A small pressable filter tab. Sized to stay tappable despite its looks. */
@@ -75,9 +75,9 @@ export function TextTab({
   active = false,
   onPress,
 }: {
-  label: string;
-  active?: boolean;
-  onPress: () => void;
+  readonly label: string;
+  readonly active?: boolean;
+  readonly onPress: () => void;
 }) {
   const { palette } = useTheme();
   const haptics = useHaptics();
@@ -122,11 +122,11 @@ export function Segmented<T extends string>({
   style,
   accessibilityLabel,
 }: {
-  options: SegmentedOption<T>[];
-  value: T;
-  onChange: (value: T) => void;
-  style?: StyleProp<ViewStyle>;
-  accessibilityLabel?: string;
+  readonly options: SegmentedOption<T>[];
+  readonly value: T;
+  readonly onChange: (value: T) => void;
+  readonly style?: StyleProp<ViewStyle>;
+  readonly accessibilityLabel?: string;
 }) {
   const { palette } = useTheme();
   const haptics = useHaptics();
@@ -196,7 +196,7 @@ export function Segmented<T extends string>({
 
 /* --------------------------------------------------------------- Badge -- */
 
-export function Badge({ label, color, icon }: { label: string; color: string; icon?: ReactNode }) {
+export function Badge({ label, color, icon }: { readonly label: string; readonly color: string; readonly icon?: ReactNode }) {
   const { palette } = useTheme();
   return (
     <View
@@ -225,9 +225,9 @@ export function ProgressBar({
   label,
   indeterminate = false,
 }: {
-  fraction: number;
-  label?: string;
-  indeterminate?: boolean;
+  readonly fraction: number;
+  readonly label?: string;
+  readonly indeterminate?: boolean;
 }) {
   const { palette } = useTheme();
   const clamped = Math.max(0, Math.min(1, Number.isFinite(fraction) ? fraction : 0));
@@ -270,17 +270,18 @@ export function IconButton({
   active = false,
   disabled = false,
 }: {
-  icon: keyof typeof Ionicons.glyphMap;
-  onPress: () => void;
-  label: string;
-  color?: string;
-  size?: number;
-  active?: boolean;
-  disabled?: boolean;
+  readonly icon: keyof typeof Ionicons.glyphMap;
+  readonly onPress: () => void;
+  readonly label: string;
+  readonly color?: string;
+  readonly size?: number;
+  readonly active?: boolean;
+  readonly disabled?: boolean;
 }) {
   const { palette } = useTheme();
   const haptics = useHaptics();
-  const tint = disabled ? palette.inkFaint : color ?? (active ? palette.accent : palette.inkSoft);
+  const activeTint = active ? palette.accent : palette.inkSoft;
+  const tint = disabled ? palette.inkFaint : color ?? activeTint;
 
   return (
     <Pressable
