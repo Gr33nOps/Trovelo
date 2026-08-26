@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { HIT_SLOP, MIN_TOUCH, PAGE_PAD, spacing } from '../constants/theme';
+import { HIT_SLOP, MIN_TOUCH, PAGE_PAD, elevation, spacing } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { useHaptics } from '../hooks/useHaptics';
 import { Type } from './Type';
@@ -20,6 +20,8 @@ export interface NavBarProps {
   /** Large page title. */
   readonly large?: boolean;
   readonly borderless?: boolean;
+  /** A visible shadow instead of just a hairline — for a title sitting directly above scrolling content, so the boundary reads as a raised layer rather than a hard clip. */
+  readonly elevated?: boolean;
 }
 
 /**
@@ -36,13 +38,20 @@ export function NavBar({
   align = 'center',
   large = false,
   borderless = true,
+  elevated = false,
 }: NavBarProps) {
   const { palette } = useTheme();
   const insets = useSafeAreaInsets();
   const start = align === 'start';
 
   return (
-    <View style={[styles.root, { backgroundColor: palette.backdrop }]}>
+    <View
+      style={[
+        styles.root,
+        { backgroundColor: palette.backdrop },
+        elevated && elevation(palette, 'floating'),
+      ]}
+    >
       <View style={{ height: insets.top }} />
 
       {start ? (
@@ -128,6 +137,9 @@ export function NavTextAction({
 }) {
   const { palette } = useTheme();
   const haptics = useHaptics();
+  // A disabled accent-coloured label just goes dim and muddy at low opacity;
+  // a plain muted colour reads as "not available right now" more clearly.
+  const color = disabled ? palette.inkFaint : accent ? palette.accent : palette.ink;
   return (
     <Pressable
       onPress={() => {
@@ -140,9 +152,9 @@ export function NavTextAction({
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ disabled }}
-      style={({ pressed }) => [styles.textAction, { opacity: actionOpacity(disabled, pressed) }]}
+      style={({ pressed }) => [styles.textAction, { opacity: disabled ? 1 : pressed ? 0.5 : 1 }]}
     >
-      <Type role="bodyStrong" color={accent ? palette.accent : palette.ink}>
+      <Type role="bodyStrong" color={color}>
         {label}
       </Type>
     </Pressable>

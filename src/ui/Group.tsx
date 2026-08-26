@@ -39,13 +39,16 @@ export function SectionHeader({
 export function Group({
   children,
   style,
+  borderColor,
 }: {
   readonly children: ReactNode;
   readonly style?: StyleProp<ViewStyle>;
+  /** Tints the card's own border — e.g. a muted danger tone to set a destructive group apart. */
+  readonly borderColor?: string;
 }) {
   const items = Children.toArray(children).filter(isValidElement);
   return (
-    <Panel style={[styles.group, style]} borderRadius={radii.lg}>
+    <Panel style={[styles.group, style]} borderRadius={radii.lg} borderColor={borderColor}>
       {items.map((child, index) => (
         <Fragment key={child.key ?? index}>
           {index > 0 ? <Rule /> : null}

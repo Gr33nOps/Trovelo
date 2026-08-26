@@ -4,7 +4,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 
 import { AppMark } from '../components/AppMark';
-import { ACCENT_COLORS, PAGE_PAD, contrastingInk, spacing } from '../constants/theme';
+import { ACCENT_COLORS, PAGE_PAD, contrastingInk, spacing, withAlpha } from '../constants/theme';
 import { useEntries } from '../context/EntriesContext';
 import { useSettings } from '../context/SettingsContext';
 import { useTheme } from '../context/ThemeContext';
@@ -25,7 +25,7 @@ import { Type } from '../ui/Type';
 type Props = MainTabScreenProps<'Settings'>;
 
 const THEME_OPTIONS = [
-  { value: 'system' as ThemeMode, label: 'Automatic', icon: 'phone-portrait-outline' as const },
+  { value: 'system' as ThemeMode, label: 'Auto', icon: 'phone-portrait-outline' as const },
   { value: 'light' as ThemeMode, label: 'Day', icon: 'sunny-outline' as const },
   { value: 'dark' as ThemeMode, label: 'Night', icon: 'moon-outline' as const },
 ];
@@ -124,7 +124,7 @@ export default function SettingsScreen({ navigation }: Props) {
 
   return (
     <Backdrop>
-      <NavBar title="Settings" align="start" large borderless={false} />
+      <NavBar title="Settings" align="start" large borderless={false} elevated />
 
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + spacing.lg }]}
@@ -163,7 +163,7 @@ export default function SettingsScreen({ navigation }: Props) {
                     },
                   ]}
                 >
-                  {selected ? <Ionicons name="checkmark" size={16} color={contrastingInk(swatch)} /> : null}
+                  {selected ? <Ionicons name="checkmark" size={14} color={contrastingInk(swatch)} /> : null}
                 </Pressable>
               );
             })}
@@ -176,6 +176,7 @@ export default function SettingsScreen({ navigation }: Props) {
         <View>
           <SectionHeader title="General" />
           <Group>
+            <Row title="Privacy" subtitle="Nothing leaves this phone" chevron={false} />
             <Row title="App icon" onPress={() => navigation.navigate('AppIcon')} />
             <Row
               title="Vibration"
@@ -271,7 +272,7 @@ export default function SettingsScreen({ navigation }: Props) {
 
         <View>
           <SectionHeader title="Danger zone" />
-          <Group>
+          <Group borderColor={withAlpha(palette.danger, 0.35)}>
             <Row
               title="Delete everything"
               subtitle={`${entries.length} ${entries.length === 1 ? 'entry' : 'entries'} on this phone`}
@@ -286,8 +287,7 @@ export default function SettingsScreen({ navigation }: Props) {
         <View style={styles.about}>
           <AppMark size={48} />
           <Type role="caption" style={styles.aboutText}>
-            Trovelo has no account, telemetry, or server, and makes no network requests. Everything you write
-            stays on this phone.
+            No account, no server, no network requests. Everything you write stays on this phone.
           </Type>
         </View>
       </ScrollView>
@@ -317,9 +317,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xs,
   },
   swatch: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,

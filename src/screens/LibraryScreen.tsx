@@ -204,6 +204,10 @@ function LibraryHeader({
           ) : null}
         </>
       ) : null}
+
+      {/* Bounds the list area with a rule so even a single row reads as
+          part of a list, not text floating on the page. */}
+      <Rule />
     </View>
   );
 }
@@ -420,6 +424,7 @@ export default function LibraryScreen({ navigation, route }: Props) {
         ListHeaderComponent={header}
         contentContainerStyle={[styles.list, { paddingBottom: tabBarHeight + spacing.xl }]}
         ItemSeparatorComponent={ItemSeparator}
+        ListFooterComponent={filtered.length > 0 ? ItemSeparator : undefined}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         initialNumToRender={10}
@@ -478,7 +483,7 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm,
   },
   toolbar: {
     flexDirection: 'row',

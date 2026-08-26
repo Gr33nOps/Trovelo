@@ -63,6 +63,12 @@ interface Skin {
  */
 function skinFor(variant: ButtonVariant, palette: Palette, disabled: boolean, tint?: string): Skin {
   if (disabled) {
+    // `plain` reads as understated text, never a bordered control — a
+    // disabled plain button should just dim that text, not turn into a
+    // filled, bordered chip that suddenly looks more prominent than usual.
+    if (variant === 'plain') {
+      return { fill: 'transparent', ink: palette.inkFaint, border: 'transparent', bordered: false };
+    }
     return { fill: palette.well, ink: palette.inkFaint, border: palette.edge, bordered: true };
   }
   if (tint) {

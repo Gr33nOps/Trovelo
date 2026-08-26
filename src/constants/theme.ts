@@ -335,7 +335,7 @@ export function textStyle(role: TextRole, palette: Palette): TextStyle {
       fontFamily: fonts.bodyMedium,
       fontSize: fontSizes.xs,
       fontWeight: weights.medium,
-      color: palette.inkFaint,
+      color: palette.inkSoft,
       letterSpacing: 0.6,
       textTransform: 'uppercase',
       lineHeight: 16,

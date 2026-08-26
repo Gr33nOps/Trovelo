@@ -297,7 +297,6 @@ export default function AddEditEntryScreen({ navigation, route }: Props) {
             multiline
             maxLength={MAX_TEXT_LENGTH}
             showCounter={text.length > COUNTER_THRESHOLD}
-            variant="plain"
             inputStyle={styles.textArea}
           />
 
@@ -345,7 +344,7 @@ const styles = StyleSheet.create({
     gap: spacing.lg,
   },
   textArea: {
-    minHeight: 180,
+    minHeight: 140,
     fontSize: 19,
     lineHeight: 30,
     paddingHorizontal: 0,

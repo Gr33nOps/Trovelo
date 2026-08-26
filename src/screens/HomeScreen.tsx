@@ -136,15 +136,19 @@ export default function HomeScreen({ navigation }: Props) {
 
         <View style={styles.revealToolbar}>
           <Button label="Done" onPress={() => handleStatus('done')} variant="primary" size="md" style={styles.grow} />
-          <Button label="Another" onPress={surprise} variant="outline" size="md" style={styles.grow} />
-          <IconButton
-            icon="ellipsis-horizontal"
-            label="More actions"
+          <Button label="Show another" onPress={surprise} variant="outline" size="md" style={styles.grow} />
+          <Pressable
             onPress={() => {
               haptics.medium();
               setMoreOpen(true);
             }}
-          />
+            accessibilityRole="button"
+            accessibilityLabel="More actions"
+            hitSlop={HIT_SLOP}
+            style={[styles.moreButton, { borderColor: palette.edge }]}
+          >
+            <Ionicons name="ellipsis-horizontal" size={18} color={palette.inkSoft} />
+          </Pressable>
         </View>
       </View>
     );
@@ -298,7 +302,7 @@ export default function HomeScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   content: {
     paddingHorizontal: PAGE_PAD,
-    gap: spacing.xxl,
+    gap: spacing.lg,
   },
   streakWrap: {
     alignItems: 'flex-end',
@@ -319,7 +323,6 @@ const styles = StyleSheet.create({
   },
   reveal: {
     gap: spacing.xl,
-    paddingTop: spacing.lg,
   },
   revealToolbar: {
     flexDirection: 'row',
@@ -328,6 +331,14 @@ const styles = StyleSheet.create({
   },
   grow: {
     flex: 1,
+  },
+  moreButton: {
+    width: 48,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radii.pill,
+    borderWidth: 1.5,
   },
   flex: {
     flex: 1,
