@@ -34,36 +34,33 @@ export const EntryCard = memo(
         accessibilityHint="Opens this entry"
         style={({ pressed }) => [styles.row, pressed && { opacity: 0.55 }]}
       >
-        <View style={styles.meta}>
-          <View style={styles.metaLeft}>
-            {entry.isPinned ? <Ionicons name="bookmark" size={13} color={palette.accent} /> : null}
-            {entry.isFavorite ? <Ionicons name="star" size={13} color={palette.accent} /> : null}
-          </View>
-          <Type role="caption" color={palette.inkFaint}>
-            {formatShortDate(entry.createdAt)} · {formatShortRelative(entry.createdAt)}
+        <View style={styles.main}>
+          <Type
+            role="body"
+            numberOfLines={3}
+            color={done ? palette.inkFaint : palette.ink}
+            style={done ? styles.done : undefined}
+          >
+            {display}
           </Type>
+
+          {entry.title && preview && entry.title.trim() !== preview ? (
+            <Type role="caption" numberOfLines={2} color={palette.inkSoft}>
+              {preview}
+            </Type>
+          ) : null}
+
+          <View style={styles.meta}>
+            {entry.isPinned ? <Ionicons name="bookmark" size={12} color={palette.accent} /> : null}
+            {entry.isFavorite ? <Ionicons name="star" size={12} color={palette.accent} /> : null}
+            <Type role="caption" color={palette.inkSoft}>
+              {formatShortDate(entry.createdAt)} · {formatShortRelative(entry.createdAt)}
+              {folderName ? ` · ${folderName}` : ''}
+            </Type>
+          </View>
         </View>
 
-        <Type
-          role="body"
-          numberOfLines={3}
-          color={done ? palette.inkFaint : palette.ink}
-          style={done ? styles.done : undefined}
-        >
-          {display}
-        </Type>
-
-        {entry.title && preview && entry.title.trim() !== preview ? (
-          <Type role="caption" numberOfLines={2} color={palette.inkSoft}>
-            {preview}
-          </Type>
-        ) : null}
-
-        {folderName ? (
-          <Type role="caption" color={palette.inkFaint}>
-            {folderName}
-          </Type>
-        ) : null}
+        <Ionicons name="chevron-forward" size={16} color={palette.inkFaint} style={styles.chevron} />
       </Pressable>
     );
   },
@@ -84,20 +81,22 @@ export const EntryCard = memo(
 
 const styles = StyleSheet.create({
   row: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingVertical: spacing.xl,
     gap: spacing.sm,
+  },
+  main: {
+    flex: 1,
+    gap: 4,
   },
   meta: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
+    gap: 5,
   },
-  metaLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    flexShrink: 1,
+  chevron: {
+    marginLeft: spacing.xs,
   },
   done: {
     textDecorationLine: 'line-through',

@@ -28,7 +28,7 @@ function NewPlaceholder() {
   return <View style={{ flex: 1 }} />;
 }
 
-const FAB_SIZE = 52;
+const FAB_SIZE = 44;
 
 interface TabIconProps {
   readonly color: string;
@@ -62,9 +62,12 @@ const settingsTabIcon = makeTabIcon('settings', 'settings-outline');
 const libraryTabLabel = makeTabLabel('Trovelo');
 const surpriseTabLabel = makeTabLabel('Surprise');
 const settingsTabLabel = makeTabLabel('Settings');
-const noTabLabel = () => null;
 
-/** The raised "+" compose button. A real component (not an inline render prop) since it needs live theme colours. */
+/**
+ * The raised "+" compose button. A real component (not an inline render prop)
+ * since it needs live theme colours. Carries a caption label like every other
+ * tab, rather than relying on the icon alone to be self-explanatory.
+ */
 function ComposeTabButton({ onPress }: BottomTabBarButtonProps) {
   const { palette } = useTheme();
   return (
@@ -85,8 +88,9 @@ function ComposeTabButton({ onPress }: BottomTabBarButtonProps) {
           },
         ]}
       >
-        <Ionicons name="add" size={26} color={palette.accentInk} />
+        <Ionicons name="add" size={22} color={palette.accentInk} />
       </View>
+      <TabLabel label="New idea" color={palette.inkSoft} focused={false} />
     </Pressable>
   );
 }
@@ -104,7 +108,7 @@ export function MainTabs() {
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: palette.ink,
-        tabBarInactiveTintColor: palette.inkFaint,
+        tabBarInactiveTintColor: palette.inkSoft,
         tabBarStyle: {
           backgroundColor: palette.backdrop,
           borderTopColor: palette.edge,
@@ -149,7 +153,6 @@ export function MainTabs() {
           },
         })}
         options={{
-          tabBarLabel: noTabLabel,
           tabBarButton: ComposeTabButton,
         }}
       />
@@ -201,12 +204,16 @@ const styles = StyleSheet.create({
   fab: {
     width: FAB_SIZE,
     height: FAB_SIZE,
-    marginTop: -22,
+    // Pulled up so the circle's net footprint below this point matches a
+    // plain 22px tab icon — with a label now following underneath (unlike
+    // before), the raised circle can't also claim as much vertical space as
+    // it used to or it pushes the label past the tab bar's fixed height.
+    marginTop: -(FAB_SIZE - 22),
     alignItems: 'center',
     justifyContent: 'center',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.22,
+    shadowRadius: 7,
+    elevation: 4,
   },
 });

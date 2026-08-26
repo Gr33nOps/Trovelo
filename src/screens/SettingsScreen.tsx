@@ -15,6 +15,7 @@ import { clearAllStoredData } from '../storage/storage';
 import { ThemeMode } from '../types';
 import { Button } from '../ui/Button';
 import { Segmented } from '../ui/Controls';
+import { CreateFolderDialog } from '../ui/CreateFolderDialog';
 import { Field } from '../ui/Field';
 import { Group, Row, SectionHeader } from '../ui/Group';
 import { NavBar } from '../ui/NavBar';
@@ -42,24 +43,10 @@ export default function SettingsScreen({ navigation }: Props) {
   const haptics = useHaptics();
   const toast = useToast();
 
-  const [newFolder, setNewFolder] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [erasing, setErasing] = useState(false);
-
-  const handleAddFolder = () => {
-    try {
-      addCategory(newFolder);
-      setNewFolder('');
-      haptics.light();
-    } catch (error) {
-      haptics.warning();
-      toast.show({
-        message: error instanceof Error ? error.message : 'That folder could not be created.',
-        tone: 'warning',
-      });
-    }
-  };
+  const [createFolderOpen, setCreateFolderOpen] = useState(false);
 
   const handleRename = () => {
     if (!editingId) return;
@@ -137,7 +124,7 @@ export default function SettingsScreen({ navigation }: Props) {
 
   return (
     <Backdrop>
-      <NavBar title="Settings" align="start" large borderless />
+      <NavBar title="Settings" align="start" large borderless={false} />
 
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + spacing.lg }]}
@@ -182,19 +169,17 @@ export default function SettingsScreen({ navigation }: Props) {
             })}
           </View>
           <Type role="caption" color={palette.inkFaint} align="center" style={styles.accentName}>
-            {ACCENT_COLORS.find((option) => option.id === accentId)?.label}
+            Accent · {ACCENT_COLORS.find((option) => option.id === accentId)?.label}
           </Type>
-          <Group style={styles.appIconRow}>
-            <Row title="App icon" subtitle="Change the home-screen icon to match." onPress={() => navigation.navigate('AppIcon')} />
-          </Group>
         </View>
 
         <View>
-          <SectionHeader title="Feel" />
+          <SectionHeader title="General" />
           <Group>
+            <Row title="App icon" onPress={() => navigation.navigate('AppIcon')} />
             <Row
               title="Vibration"
-              subtitle="A small tap when you press things."
+              subtitle="Haptic feedback"
               right={
                 <Switch
                   value={settings.hapticsEnabled}
@@ -205,19 +190,19 @@ export default function SettingsScreen({ navigation }: Props) {
                 />
               }
             />
+            <Row
+              title="Backup & restore"
+              subtitle="Encrypted local backups"
+              onPress={() => navigation.navigate('Backup')}
+            />
           </Group>
         </View>
 
         <View>
           <SectionHeader title="Folders" hint="Deleting a folder keeps what's inside it." />
           <Group>
-            {categories.length === 0 ? (
-              <Row
-                title="No folders yet"
-                subtitle="Search and tags usually do the job."
-                chevron={false}
-              />
-            ) : (
+            {categories.length === 0 ? <Row title="No folders yet" chevron={false} /> : null}
+            {categories.length > 0 &&
               categories.map((category) => {
                 const count = entries.filter((entry) => entry.categoryId === category.id).length;
                 const subtitle = `${count} ${count === 1 ? 'entry' : 'entries'}`;
@@ -266,29 +251,9 @@ export default function SettingsScreen({ navigation }: Props) {
                     chevron={false}
                   />
                 );
-              })
-            )}
+              })}
+            <Row title="+ Create folder" chevron={false} onPress={() => setCreateFolderOpen(true)} />
           </Group>
-
-          <View style={styles.addFolder}>
-            <Field
-              value={newFolder}
-              onChangeText={setNewFolder}
-              placeholder="New folder name"
-              maxLength={40}
-              returnKeyType="done"
-              onSubmitEditing={handleAddFolder}
-              containerStyle={styles.grow}
-              accessibilityLabel="New folder name"
-            />
-            <Button
-              label="Add"
-              size="md"
-              variant="primary"
-              disabled={newFolder.trim().length === 0}
-              onPress={handleAddFolder}
-            />
-          </View>
         </View>
 
         <View>
@@ -301,17 +266,6 @@ export default function SettingsScreen({ navigation }: Props) {
               onPress={() => navigation.navigate('Review')}
             />
             <Row title="Tidy up" subtitle="Tag entries that don't have any yet." onPress={() => navigation.navigate('Tidy')} />
-          </Group>
-        </View>
-
-        <View>
-          <SectionHeader title="Data" />
-          <Group>
-            <Row
-              title="Backup & restore"
-              subtitle="Encrypted local backups. Restore merges, never overwrites."
-              onPress={() => navigation.navigate('Backup')}
-            />
           </Group>
         </View>
 
@@ -337,6 +291,12 @@ export default function SettingsScreen({ navigation }: Props) {
           </Type>
         </View>
       </ScrollView>
+
+      <CreateFolderDialog
+        visible={createFolderOpen}
+        onClose={() => setCreateFolderOpen(false)}
+        onCreate={addCategory}
+      />
     </Backdrop>
   );
 }
@@ -367,9 +327,6 @@ const styles = StyleSheet.create({
   accentName: {
     marginTop: spacing.sm,
   },
-  appIconRow: {
-    marginTop: spacing.lg,
-  },
   folderEdit: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -380,12 +337,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-  },
-  addFolder: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-    marginTop: spacing.md,
   },
   grow: {
     flex: 1,

@@ -152,7 +152,6 @@ export function Button({
             backgroundColor: skin.fill,
             borderWidth: skin.bordered ? 1.5 : 0,
             borderColor: skin.border,
-            opacity: disabled ? 0.6 : 1,
             minWidth: size === 'sm' ? undefined : MIN_TOUCH,
           },
         ]}

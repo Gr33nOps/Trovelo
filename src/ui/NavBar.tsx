@@ -90,7 +90,7 @@ export function NavBar({
 }
 
 function actionOpacity(disabled: boolean, pressed: boolean): number {
-  if (disabled) return 0.3;
+  if (disabled) return 0.45;
   return pressed ? 0.5 : 1;
 }
 

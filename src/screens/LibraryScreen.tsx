@@ -15,7 +15,6 @@ import { useHaptics } from '../hooks/useHaptics';
 import { MainTabScreenProps } from '../navigation';
 import { Category, Entry, SortOrder, StatusFilter } from '../types';
 import { ActionSheet, ActionSheetItem } from '../ui/ActionSheet';
-import { Button } from '../ui/Button';
 import { Chip, IconButton } from '../ui/Controls';
 import { EmptyState } from '../ui/EmptyState';
 import { Backdrop, Rule, Well } from '../ui/Surface';
@@ -47,11 +46,14 @@ function filterSummaryLabel(activeExtra: number, filteredCount: number, hasQuery
   return 'Filter';
 }
 
+/** Below this many ideas, filtering/sorting is noise rather than a useful tool. */
+const MIN_ENTRIES_FOR_TOOLBAR = 5;
+
 function LibraryHeader({
   palette,
   insetsTop,
   keptCount,
-  onSurprise,
+  totalCount,
   query,
   onChangeQuery,
   showFilters,
@@ -75,7 +77,7 @@ function LibraryHeader({
   readonly palette: Palette;
   readonly insetsTop: number;
   readonly keptCount: number;
-  readonly onSurprise: () => void;
+  readonly totalCount: number;
   readonly query: string;
   readonly onChangeQuery: (value: string) => void;
   readonly showFilters: boolean;
@@ -96,26 +98,19 @@ function LibraryHeader({
   readonly tagFilter: string | null;
   readonly onChangeTagFilter: (value: string | null) => void;
 }) {
+  const showToolbar = totalCount >= MIN_ENTRIES_FOR_TOOLBAR;
+
   return (
     <View style={styles.header}>
       <View style={{ height: insetsTop }} />
 
-      <View style={styles.brandRow}>
-        <View style={styles.brand}>
-          <Type role="display" accessibilityRole="header">
-            Trovelo
-          </Type>
-          <Type role="caption" color={palette.inkFaint}>
-            {keptCount} {keptCount === 1 ? 'idea' : 'ideas'} saved
-          </Type>
-        </View>
-        <Button
-          label="Surprise"
-          onPress={onSurprise}
-          variant="secondary"
-          size="sm"
-          icon={<Ionicons name="shuffle-outline" size={15} color={palette.ink} />}
-        />
+      <View style={styles.brand}>
+        <Type role="display" accessibilityRole="header">
+          Trovelo
+        </Type>
+        <Type role="caption" color={palette.inkFaint}>
+          {keptCount} {keptCount === 1 ? 'idea' : 'ideas'} saved
+        </Type>
       </View>
 
       <Well style={styles.search} borderRadius={radii.md}>
@@ -135,75 +130,79 @@ function LibraryHeader({
         {query ? <IconButton icon="close-circle" label="Clear" size={18} onPress={() => onChangeQuery('')} /> : null}
       </Well>
 
-      <View style={styles.toolbar}>
-        <Pressable
-          onPress={onToggleFilters}
-          hitSlop={HIT_SLOP}
-          accessibilityRole="button"
-          accessibilityLabel="Filters"
-          style={[
-            styles.toolbarButton,
-            { borderRadius: radii.pill, backgroundColor: showFilters || activeExtra > 0 ? withAlpha(palette.ink, 0.06) : 'transparent' },
-          ]}
-        >
-          <Ionicons name="options-outline" size={14} color={palette.inkSoft} />
-          <Type role="caption" color={palette.inkSoft}>
-            {filterSummaryLabel(activeExtra, filteredCount, hasQuery)}
-          </Type>
-        </Pressable>
-        <Pressable
-          onPress={onCycleSort}
-          hitSlop={HIT_SLOP}
-          style={[styles.toolbarButton, { borderRadius: radii.pill }]}
-          accessibilityRole="button"
-          accessibilityLabel={`Sort: ${SORT_LABELS[sort]}`}
-        >
-          <Ionicons name="swap-vertical" size={14} color={palette.inkSoft} />
-          <Type role="caption" color={palette.inkSoft}>
-            {SORT_LABELS[sort]}
-          </Type>
-        </Pressable>
-      </View>
-
-      {showFilters ? (
-        <View style={styles.filters}>
-          <View style={styles.chips}>
-            <Chip label="Archived" active={showArchived} onPress={onToggleArchived} />
-            {STATUS_FILTER_OPTIONS.map((o) => (
-              <Chip
-                key={o.value}
-                label={o.label}
-                active={statusFilter === o.value}
-                onPress={() => onChangeStatusFilter(o.value)}
-              />
-            ))}
+      {showToolbar ? (
+        <>
+          <View style={styles.toolbar}>
+            <Pressable
+              onPress={onToggleFilters}
+              hitSlop={HIT_SLOP}
+              accessibilityRole="button"
+              accessibilityLabel="Filters"
+              style={[
+                styles.toolbarButton,
+                { borderRadius: radii.pill, backgroundColor: showFilters || activeExtra > 0 ? withAlpha(palette.ink, 0.06) : 'transparent' },
+              ]}
+            >
+              <Ionicons name="options-outline" size={14} color={palette.inkSoft} />
+              <Type role="caption" color={palette.inkSoft}>
+                {filterSummaryLabel(activeExtra, filteredCount, hasQuery)}
+              </Type>
+            </Pressable>
+            <Pressable
+              onPress={onCycleSort}
+              hitSlop={HIT_SLOP}
+              style={[styles.toolbarButton, { borderRadius: radii.pill }]}
+              accessibilityRole="button"
+              accessibilityLabel={`Sort: ${SORT_LABELS[sort]}`}
+            >
+              <Ionicons name="swap-vertical" size={14} color={palette.inkSoft} />
+              <Type role="caption" color={palette.inkSoft}>
+                {SORT_LABELS[sort]}
+              </Type>
+            </Pressable>
           </View>
-          {categories.length > 0 ? (
-            <View style={styles.chips}>
-              <Chip label="All folders" active={categoryFilter === null} onPress={() => onChangeCategoryFilter(null)} />
-              <Chip label="Loose" active={categoryFilter === 'none'} onPress={() => onChangeCategoryFilter('none')} />
-              {categories.map((c) => (
-                <Chip
-                  key={c.id}
-                  label={c.name}
-                  active={categoryFilter === c.id}
-                  onPress={() => onChangeCategoryFilter(c.id)}
-                />
-              ))}
+
+          {showFilters ? (
+            <View style={styles.filters}>
+              <View style={styles.chips}>
+                <Chip label="Archived" active={showArchived} onPress={onToggleArchived} />
+                {STATUS_FILTER_OPTIONS.map((o) => (
+                  <Chip
+                    key={o.value}
+                    label={o.label}
+                    active={statusFilter === o.value}
+                    onPress={() => onChangeStatusFilter(o.value)}
+                  />
+                ))}
+              </View>
+              {categories.length > 0 ? (
+                <View style={styles.chips}>
+                  <Chip label="All folders" active={categoryFilter === null} onPress={() => onChangeCategoryFilter(null)} />
+                  <Chip label="Loose" active={categoryFilter === 'none'} onPress={() => onChangeCategoryFilter('none')} />
+                  {categories.map((c) => (
+                    <Chip
+                      key={c.id}
+                      label={c.name}
+                      active={categoryFilter === c.id}
+                      onPress={() => onChangeCategoryFilter(c.id)}
+                    />
+                  ))}
+                </View>
+              ) : null}
+              {allTags.length > 0 ? (
+                <View style={styles.chips}>
+                  {tagFilter ? (
+                    <Chip label={`#${displayTag(tagFilter)}`} active onPress={() => onChangeTagFilter(null)} />
+                  ) : (
+                    allTags.slice(0, 8).map(({ tag, count }) => (
+                      <Chip key={tag} label={`#${displayTag(tag)}`} count={count} onPress={() => onChangeTagFilter(tag)} />
+                    ))
+                  )}
+                </View>
+              ) : null}
             </View>
           ) : null}
-          {allTags.length > 0 ? (
-            <View style={styles.chips}>
-              {tagFilter ? (
-                <Chip label={`#${displayTag(tagFilter)}`} active onPress={() => onChangeTagFilter(null)} />
-              ) : (
-                allTags.slice(0, 8).map(({ tag, count }) => (
-                  <Chip key={tag} label={`#${displayTag(tag)}`} count={count} onPress={() => onChangeTagFilter(tag)} />
-                ))
-              )}
-            </View>
-          ) : null}
-        </View>
+        </>
       ) : null}
     </View>
   );
@@ -357,10 +356,7 @@ export default function LibraryScreen({ navigation, route }: Props) {
       palette={palette}
       insetsTop={insets.top}
       keptCount={keptCount}
-      onSurprise={() => {
-        haptics.medium();
-        navigation.navigate('Home');
-      }}
+      totalCount={entries.length}
       query={query}
       onChangeQuery={setQuery}
       showFilters={showFilters}
@@ -470,15 +466,9 @@ const styles = StyleSheet.create({
     gap: spacing.xl,
     paddingBottom: spacing.md,
   },
-  brandRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-    paddingTop: spacing.xl,
-  },
   brand: {
     gap: 6,
+    paddingTop: spacing.xl,
   },
   search: {
     flexDirection: 'row',

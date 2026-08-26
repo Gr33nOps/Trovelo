@@ -2,7 +2,7 @@
   "expo": {
     "name": "Trovelo",
     "slug": "trovelo",
-    "version": "2.1.1",
+    "version": "2.2.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.trovelo.app",
-      "buildNumber": "18",
+      "buildNumber": "19",
       "userInterfaceStyle": "automatic",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
@@ -19,7 +19,7 @@
     },
     "android": {
       "package": "com.trovelo.app",
-      "versionCode": 18,
+      "versionCode": 19,
       "blockedPermissions": [
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE"

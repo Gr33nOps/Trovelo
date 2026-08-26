@@ -34,6 +34,8 @@ function tagCountLabel(count: number): string {
 function EntryDetailsSection({
   detailsOpen,
   onToggle,
+  title,
+  onChangeTitle,
   tags,
   onChangeTags,
   knownTags,
@@ -49,6 +51,8 @@ function EntryDetailsSection({
 }: {
   readonly detailsOpen: boolean;
   readonly onToggle: () => void;
+  readonly title: string;
+  readonly onChangeTitle: (title: string) => void;
   readonly tags: string[];
   readonly onChangeTags: (tags: string[]) => void;
   readonly knownTags: string[];
@@ -63,7 +67,7 @@ function EntryDetailsSection({
   readonly onCreateFolder: () => void;
 }) {
   const { palette } = useTheme();
-  const collapsedSummary = !detailsOpen && (tags.length > 0 || categoryId);
+  const collapsedSummary = !detailsOpen && (title.trim() || tags.length > 0 || categoryId);
 
   return (
     <>
@@ -73,8 +77,8 @@ function EntryDetailsSection({
         </Type>
         <Ionicons name={detailsOpen ? 'chevron-up' : 'chevron-down'} size={14} color={palette.inkFaint} />
         {collapsedSummary ? (
-          <Type role="caption" color={palette.inkFaint}>
-            {[tags.length > 0 ? tagCountLabel(tags.length) : null, categoryId ? folderLabel : null]
+          <Type role="caption" color={palette.inkSoft} numberOfLines={1} style={styles.detailsSummary}>
+            {[title.trim() || null, tags.length > 0 ? tagCountLabel(tags.length) : null, categoryId ? folderLabel : null]
               .filter(Boolean)
               .join(' · ')}
           </Type>
@@ -83,6 +87,18 @@ function EntryDetailsSection({
 
       {detailsOpen ? (
         <>
+          <View style={styles.detailBlock}>
+            <Field
+              value={title}
+              onChangeText={onChangeTitle}
+              label="Title"
+              placeholder="Optional"
+              maxLength={MAX_TITLE_LENGTH}
+              returnKeyType="next"
+              variant="plain"
+            />
+          </View>
+
           <View style={styles.detailBlock}>
             <Type role="label" pressed>
               Tags
@@ -274,40 +290,32 @@ export default function AddEditEntryScreen({ navigation, route }: Props) {
           showsVerticalScrollIndicator={false}
         >
           <Field
-            value={title}
-            onChangeText={setTitle}
-            placeholder="Title (optional)"
-            maxLength={MAX_TITLE_LENGTH}
-            returnKeyType="next"
-            variant="plain"
-            containerStyle={styles.titleField}
-          />
-
-          <Field
             value={text}
             onChangeText={setText}
-            placeholder="A half-formed thought, a what-if, a thing worth trying..."
+            label="Idea"
+            placeholder="What's on your mind?"
             multiline
             maxLength={MAX_TEXT_LENGTH}
             showCounter={text.length > COUNTER_THRESHOLD}
             variant="plain"
             inputStyle={styles.textArea}
-            containerStyle={styles.bodyField}
           />
 
           <Button
-            label="Polish"
+            label="Fix grammar"
             onPress={fixGrammar}
             variant="plain"
             size="sm"
             disabled={!canSave}
-            icon={<Ionicons name="sparkles-outline" size={14} color={palette.inkSoft} />}
+            icon={<Ionicons name="text-outline" size={14} color={palette.inkSoft} />}
             style={styles.polishButton}
           />
 
           <EntryDetailsSection
             detailsOpen={detailsOpen}
             onToggle={() => setDetailsOpen((open) => !open)}
+            title={title}
+            onChangeTitle={setTitle}
             tags={tags}
             onChangeTags={setTags}
             knownTags={knownTags.map((item) => item.tag)}
@@ -336,27 +344,23 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     gap: spacing.lg,
   },
-  titleField: {
-    marginTop: spacing.sm,
-  },
-  bodyField: {
-    marginTop: -spacing.md,
-  },
   textArea: {
-    minHeight: 340,
+    minHeight: 180,
     fontSize: 19,
     lineHeight: 30,
     paddingHorizontal: 0,
   },
   polishButton: {
     alignSelf: 'flex-start',
-    marginTop: -spacing.sm,
   },
   detailsToggle: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
     paddingVertical: spacing.sm,
+  },
+  detailsSummary: {
+    flexShrink: 1,
   },
   detailBlock: {
     gap: spacing.sm,

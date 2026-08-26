@@ -5,8 +5,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
-import { StatusPicker } from '../components/StatusPicker';
 import { SurpriseCard } from '../components/SurpriseCard';
+import { STATUS_CONFIG } from '../constants/status';
 import { HIT_SLOP, PAGE_PAD, radius as radii, spacing, withAlpha } from '../constants/theme';
 import { useEntries } from '../context/EntriesContext';
 import { useTheme } from '../context/ThemeContext';
@@ -135,16 +135,8 @@ export default function HomeScreen({ navigation }: Props) {
         <SurpriseCard entry={revealed} folderName={folderName} />
 
         <View style={styles.revealToolbar}>
-          <Pressable
-            onPress={surprise}
-            hitSlop={HIT_SLOP}
-            accessibilityRole="button"
-            accessibilityLabel="Show me another"
-          >
-            <Type role="body" color={palette.inkSoft} style={styles.another}>
-              Show me another
-            </Type>
-          </Pressable>
+          <Button label="Done" onPress={() => handleStatus('done')} variant="primary" size="md" style={styles.grow} />
+          <Button label="Another" onPress={surprise} variant="outline" size="md" style={styles.grow} />
           <IconButton
             icon="ellipsis-horizontal"
             label="More actions"
@@ -153,10 +145,6 @@ export default function HomeScreen({ navigation }: Props) {
               setMoreOpen(true);
             }}
           />
-        </View>
-
-        <View style={styles.actions}>
-          <StatusPicker value={revealed.status} onChange={handleStatus} hideNew />
         </View>
       </View>
     );
@@ -182,7 +170,11 @@ export default function HomeScreen({ navigation }: Props) {
       >
         {streak > 1 ? (
           <View style={styles.streakWrap}>
-            <View
+            <Pressable
+              onPress={() => navigation.navigate('Stats')}
+              hitSlop={HIT_SLOP}
+              accessibilityRole="button"
+              accessibilityLabel={`${streak} day streak. Open stats to see how it works.`}
               style={[
                 styles.streak,
                 {
@@ -195,7 +187,7 @@ export default function HomeScreen({ navigation }: Props) {
               <Type role="caption" color={palette.accent} style={styles.streakText}>
                 {streak} day streak
               </Type>
-            </View>
+            </Pressable>
           </View>
         ) : null}
 
@@ -276,6 +268,8 @@ export default function HomeScreen({ navigation }: Props) {
           revealed
             ? [
                 { label: 'Open', onPress: () => navigation.navigate('EntryDetail', { entryId: revealed.id }) },
+                { label: STATUS_CONFIG.interesting.shortLabel, onPress: () => handleStatus('interesting') },
+                { label: STATUS_CONFIG.not_useful.shortLabel, onPress: () => handleStatus('not_useful') },
                 {
                   label: 'Share',
                   onPress: () => {
@@ -330,13 +324,10 @@ const styles = StyleSheet.create({
   revealToolbar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: spacing.sm,
   },
-  another: {
-    textDecorationLine: 'underline',
-  },
-  actions: {
-    gap: spacing.lg,
+  grow: {
+    flex: 1,
   },
   flex: {
     flex: 1,
