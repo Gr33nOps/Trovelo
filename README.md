@@ -12,7 +12,6 @@ Everything stays on your phone. No account, no server, no AI, no network access 
 ## Features
 
 - **Reminders & on this day** — old ideas resurface on their own, right on the library screen
-- **Fix grammar & style** — a one-tap, rule-based cleanup of spacing, punctuation and capitalisation. No model, no network.
 - **Library** — ranked search with typo tolerance, filters and sorting
 - **Streaks & weekly review** — keep what matters in front of you, deliberately
 - **Backups** — encrypted JSON or plain Markdown export; restore merges instead of overwriting

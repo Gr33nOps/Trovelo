@@ -11,8 +11,9 @@ import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useHaptics } from '../hooks/useHaptics';
 import { MainTabScreenProps } from '../navigation';
+import { appIconModuleAvailable } from '../services/appIcon';
 import { clearAllStoredData } from '../storage/storage';
-import { ThemeMode } from '../types';
+import { AccentId, ThemeMode } from '../types';
 import { Button } from '../ui/Button';
 import { Segmented } from '../ui/Controls';
 import { CreateFolderDialog } from '../ui/CreateFolderDialog';
@@ -37,7 +38,7 @@ function deleteFolderMessage(count: number): string {
 
 export default function SettingsScreen({ navigation }: Props) {
   const tabBarHeight = useBottomTabBarHeight();
-  const { palette, mode, setMode, isDark, accentId, setAccentId, resetPreferences } = useTheme();
+  const { palette, mode, setMode, isDark, accentId, setAccentId, appIconMode, resetPreferences } = useTheme();
   const settings = useSettings();
   const { entries, categories, addCategory, renameCategory, deleteCategory, clearAll } = useEntries();
   const haptics = useHaptics();
@@ -47,6 +48,29 @@ export default function SettingsScreen({ navigation }: Props) {
   const [editingName, setEditingName] = useState('');
   const [erasing, setErasing] = useState(false);
   const [createFolderOpen, setCreateFolderOpen] = useState(false);
+
+  /**
+   * The home-screen icon only actually updates on the next cold start (see
+   * ThemeContext) — applying it immediately can make Android kill the app
+   * mid-session, which reads as a crash. Tell the user instead of surprising
+   * them with it.
+   */
+  const noteIconWillUpdateOnRestart = () => {
+    if (appIconMode === 'auto' && appIconModuleAvailable) {
+      toast.show({ message: 'Restart Trovelo to update the home screen icon to match.' });
+    }
+  };
+
+  const handleModeChange = (nextMode: ThemeMode) => {
+    setMode(nextMode);
+    noteIconWillUpdateOnRestart();
+  };
+
+  const handleAccentChange = (nextAccentId: AccentId) => {
+    haptics.light();
+    setAccentId(nextAccentId);
+    noteIconWillUpdateOnRestart();
+  };
 
   const handleRename = () => {
     if (!editingId) return;
@@ -136,7 +160,7 @@ export default function SettingsScreen({ navigation }: Props) {
           <Segmented
             options={THEME_OPTIONS}
             value={mode}
-            onChange={setMode}
+            onChange={handleModeChange}
             accessibilityLabel="Appearance"
           />
           <View style={styles.accentRow} accessibilityRole="radiogroup" accessibilityLabel="Accent colour">
@@ -146,10 +170,7 @@ export default function SettingsScreen({ navigation }: Props) {
               return (
                 <Pressable
                   key={option.id}
-                  onPress={() => {
-                    haptics.light();
-                    setAccentId(option.id);
-                  }}
+                  onPress={() => handleAccentChange(option.id)}
                   hitSlop={6}
                   accessibilityRole="radio"
                   accessibilityLabel={option.label}

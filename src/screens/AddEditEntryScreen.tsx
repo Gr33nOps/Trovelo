@@ -18,7 +18,6 @@ import { Field } from '../ui/Field';
 import { NavBar, NavTextAction } from '../ui/NavBar';
 import { Backdrop } from '../ui/Surface';
 import { Type } from '../ui/Type';
-import { fixGrammarAndStyle } from '../utils/grammar';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'EntryEdit'>;
 
@@ -153,7 +152,6 @@ function EntryDetailsSection({
 
 export default function AddEditEntryScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
-  const { palette } = useTheme();
   const { entries, categories, tags: knownTags, addEntry, updateEntry, addCategory } = useEntries();
   const haptics = useHaptics();
   const toast = useToast();
@@ -234,21 +232,6 @@ export default function AddEditEntryScreen({ navigation, route }: Props) {
     navigation.goBack();
   };
 
-  const fixGrammar = () => {
-    const fixed = fixGrammarAndStyle(text);
-    if (fixed === text.trim()) {
-      toast.show({ message: 'Nothing to fix.' });
-      return;
-    }
-    const original = text;
-    setText(fixed.slice(0, MAX_TEXT_LENGTH));
-    haptics.success();
-    toast.show({
-      message: 'Fixed.',
-      action: { label: 'Undo', onPress: () => setText(original) },
-    });
-  };
-
   const createFolder = () => {
     try {
       const created = addCategory(newFolder);
@@ -300,16 +283,6 @@ export default function AddEditEntryScreen({ navigation, route }: Props) {
             inputStyle={styles.textArea}
           />
 
-          <Button
-            label="Fix grammar"
-            onPress={fixGrammar}
-            variant="plain"
-            size="sm"
-            disabled={!canSave}
-            icon={<Ionicons name="text-outline" size={14} color={palette.inkSoft} />}
-            style={styles.polishButton}
-          />
-
           <EntryDetailsSection
             detailsOpen={detailsOpen}
             onToggle={() => setDetailsOpen((open) => !open)}
@@ -348,9 +321,6 @@ const styles = StyleSheet.create({
     fontSize: 19,
     lineHeight: 30,
     paddingHorizontal: 0,
-  },
-  polishButton: {
-    alignSelf: 'flex-start',
   },
   detailsToggle: {
     flexDirection: 'row',

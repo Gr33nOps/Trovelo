@@ -23,10 +23,6 @@ const PAGES = [
     body: 'Reminders and on-this-day memories bring old ideas back to you, right on the box.',
   },
   {
-    title: 'Fix it up in one tap',
-    body: 'A grammar & style button tidies your writing right on the phone. No AI, no account, no network.',
-  },
-  {
     title: 'Yours alone',
     body: 'No account, no server. Everything stays on this phone unless you share a backup.',
   },

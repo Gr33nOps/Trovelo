@@ -154,14 +154,21 @@ export function ThemeProvider({ children }: { readonly children: ReactNode }) {
   const palette = buildPalette(isDark ? 'dark' : 'light', prefs.accentId);
 
   /**
-   * Keeps the home-screen launcher icon matching the in-app accent/theme.
-   * Gated on `ready` so this never fires with the in-memory defaults before
-   * the real stored preferences have loaded (which would flash the icon to
-   * gold/dark and back). Skipped entirely in `manual` mode, where a picked
-   * icon should stay put until the user asks to match again.
+   * Keeps the home-screen launcher icon matching the in-app accent/theme —
+   * but only by syncing once, at app start, never reactively while the app
+   * is running. Android can kill the app's process when the enabled
+   * activity-alias changes, even mid-session with `DONT_KILL_APP` set, which
+   * read as a crash when this used to fire on every accent/theme change.
+   * Deferring the actual switch to the next cold start means a change made
+   * mid-session never risks that; `SettingsScreen` tells the user a restart
+   * will pick it up. Gated on `ready` so this never fires with the in-memory
+   * defaults before the real stored preferences have loaded. Skipped
+   * entirely in `manual` mode, where a picked icon should stay put.
    */
+  const iconSyncedThisSession = useRef(false);
   useEffect(() => {
-    if (!ready || prefs.appIconMode !== 'auto') return;
+    if (!ready || prefs.appIconMode !== 'auto' || iconSyncedThisSession.current) return;
+    iconSyncedThisSession.current = true;
     void setAppIcon(prefs.accentId, isDark).catch((error) => {
       if (__DEV__) console.warn('[theme] failed to sync app icon', error);
     });
