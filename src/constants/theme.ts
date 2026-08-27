@@ -43,6 +43,10 @@ export interface Palette {
   accentInk: string;
   accentGradient: Gradient;
   accentEdge: string;
+  /** Solid, muted accent surface — chips, tags, tinted rows. Never translucent. */
+  accentSoft: string;
+  /** Solid, more saturated accent surface — active/selected emphasis. Never translucent. */
+  accentSoftStrong: string;
   danger: string;
   dangerGradient: Gradient;
   dangerEdge: string;
@@ -53,6 +57,27 @@ export interface Palette {
 
 function flat(color: string): Gradient {
   return { colors: [color, color] };
+}
+
+function hexChannels(hex: string): [number, number, number] | null {
+  if (!hex.startsWith('#')) return null;
+  const full = hex.slice(1);
+  const expanded = full.length === 3 ? full.replace(/./g, (c) => c + c) : full;
+  if (expanded.length < 6) return null;
+  return [
+    Number.parseInt(expanded.slice(0, 2), 16),
+    Number.parseInt(expanded.slice(2, 4), 16),
+    Number.parseInt(expanded.slice(4, 6), 16),
+  ];
+}
+
+/** Mixes two real colours (linear RGB blend), never alpha — the result is always fully opaque. */
+function mix(colorA: string, colorB: string, ratio: number): string {
+  const a = hexChannels(colorA);
+  const b = hexChannels(colorB);
+  if (!a || !b) return colorA;
+  const channel = (i: number) => Math.round(a[i] * ratio + b[i] * (1 - ratio)).toString(16).padStart(2, '0');
+  return `#${channel(0)}${channel(1)}${channel(2)}`;
 }
 
 const LIGHT: Palette = {
@@ -81,6 +106,8 @@ const LIGHT: Palette = {
   accentInk: '#FFFFFF',
   accentGradient: flat('#8B6914'),
   accentEdge: '#6B5010',
+  accentSoft: mix('#8B6914', '#FFFFFF', 0.14),
+  accentSoftStrong: mix('#8B6914', '#FFFFFF', 0.28),
   danger: '#B42318',
   dangerGradient: flat('#B42318'),
   dangerEdge: '#7A180F',
@@ -115,6 +142,8 @@ const DARK: Palette = {
   accentInk: '#121211',
   accentGradient: flat('#E0B84A'),
   accentEdge: '#8B6914',
+  accentSoft: mix('#E0B84A', '#1C1C1A', 0.14),
+  accentSoftStrong: mix('#E0B84A', '#1C1C1A', 0.28),
   danger: '#F97066',
   dangerGradient: flat('#F97066'),
   dangerEdge: '#7A180F',
@@ -155,7 +184,18 @@ export function buildPalette(mood: Mood, accentId: AccentId): Palette {
     accentInk: contrastingInk(accent),
     accentGradient: flat(accent),
     accentEdge: shade(accent, mood === 'dark' ? 0.55 : 0.35),
+    accentSoft: mix(accent, base.panel, 0.14),
+    accentSoftStrong: mix(accent, base.panel, 0.28),
   };
+}
+
+/**
+ * A solid surface for tinted chips, tiles, and selected rows — blends
+ * `color` into the theme's panel as real RGB, never alpha, so the result
+ * stays a deliberate solid colour no matter what renders behind it.
+ */
+export function solidTint(color: string, palette: Palette, strength: 'soft' | 'strong' = 'soft'): string {
+  return mix(color, palette.panel, strength === 'strong' ? 0.28 : 0.14);
 }
 
 /** Fixed page inset — every screen uses this so columns align. */

@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { AppMark } from '../components/AppMark';
-import { ACCENT_COLORS, PAGE_PAD, palettes, radius as radii, spacing, withAlpha } from '../constants/theme';
+import { ACCENT_COLORS, PAGE_PAD, palettes, radius as radii, spacing } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useHaptics } from '../hooks/useHaptics';
@@ -127,7 +127,7 @@ export default function AppIconScreen({ navigation }: Props) {
             {
               borderRadius: radii.lg,
               borderColor: appIconMode === 'auto' ? palette.accent : palette.edge,
-              backgroundColor: appIconMode === 'auto' ? withAlpha(palette.accent, 0.08) : palette.panel,
+              backgroundColor: appIconMode === 'auto' ? palette.accentSoft : palette.panel,
               opacity: optionOpacity(busy, appIconMode === 'auto', pressed),
             },
           ]}
@@ -211,7 +211,7 @@ function IconOption({
           {
             borderRadius: radii.xl,
             borderColor: selected ? palette.accent : 'transparent',
-            backgroundColor: selected ? withAlpha(palette.accent, 0.1) : 'transparent',
+            backgroundColor: selected ? palette.accentSoft : 'transparent',
           },
         ]}
       >

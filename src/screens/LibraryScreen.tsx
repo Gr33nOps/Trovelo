@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppMark } from '../components/AppMark';
 import { EntryCard } from '../components/EntryCard';
 import { STATUS_FILTER_OPTIONS } from '../constants/status';
-import { HIT_SLOP, PAGE_PAD, Palette, radius as radii, fonts, fontSizes, spacing, withAlpha } from '../constants/theme';
+import { HIT_SLOP, PAGE_PAD, Palette, radius as radii, fonts, fontSizes, spacing } from '../constants/theme';
 import { TagCount, useEntries } from '../context/EntriesContext';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
@@ -144,7 +144,7 @@ function LibraryHeader({
               accessibilityLabel="Filters"
               style={[
                 styles.toolbarButton,
-                { borderRadius: radii.pill, backgroundColor: showFilters || activeExtra > 0 ? withAlpha(palette.ink, 0.06) : 'transparent' },
+                { borderRadius: radii.pill, backgroundColor: showFilters || activeExtra > 0 ? palette.well : 'transparent' },
               ]}
             >
               <Ionicons name="options-outline" size={14} color={palette.inkSoft} />

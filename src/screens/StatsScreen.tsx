@@ -207,7 +207,7 @@ export default function StatsScreen({ navigation }: Props) {
                       styles.tagPill,
                       {
                         borderRadius: radii.pill,
-                        backgroundColor: withAlpha(palette.accent, 0.1),
+                        backgroundColor: palette.accentSoft,
                         borderColor: withAlpha(palette.accent, 0.3),
                       },
                     ]}

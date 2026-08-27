@@ -227,7 +227,7 @@ export default function EntryDetailScreen({ navigation, route }: Props) {
                     styles.tag,
                     {
                       borderRadius: radii.pill,
-                      backgroundColor: withAlpha(palette.accent, 0.12),
+                      backgroundColor: palette.accentSoft,
                       borderColor: withAlpha(palette.accent, 0.35),
                       opacity: pressed ? 0.6 : 1,
                     },

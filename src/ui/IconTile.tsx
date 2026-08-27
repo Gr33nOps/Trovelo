@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
-import { radius as radii, withAlpha } from '../constants/theme';
+import { radius as radii, solidTint, withAlpha } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 
 interface Props {
@@ -25,7 +25,6 @@ export function IconTile({ icon, tint, size = 38, iconSize, style }: Props) {
   const { palette } = useTheme();
   const color = tint ?? palette.inkSoft;
   const tinted = tint !== undefined;
-  const tintedAlpha = palette.mood === 'dark' ? 0.22 : 0.14;
 
   return (
     <View
@@ -35,7 +34,7 @@ export function IconTile({ icon, tint, size = 38, iconSize, style }: Props) {
           width: size,
           height: size,
           borderRadius: radii.md,
-          backgroundColor: tinted ? withAlpha(color, tintedAlpha) : withAlpha(palette.ink, 0.06),
+          backgroundColor: tinted ? solidTint(color, palette, 'strong') : palette.well,
           borderColor: tinted ? withAlpha(color, 0.4) : 'transparent',
         },
         style,

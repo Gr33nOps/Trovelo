@@ -6,7 +6,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
-import { radius as radii, spacing, withAlpha } from '../constants/theme';
+import { radius as radii, spacing } from '../constants/theme';
 import { useEntries } from '../context/EntriesContext';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
@@ -280,7 +280,7 @@ export default function BackupScreen({ navigation }: Props) {
               <View
                 style={[
                   styles.warning,
-                  { borderRadius: radii.md, backgroundColor: withAlpha(palette.accent, 0.14) },
+                  { borderRadius: radii.md, backgroundColor: palette.accentSoft },
                 ]}
               >
                 <Ionicons name="key-outline" size={15} color={palette.accent} />

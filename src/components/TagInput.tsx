@@ -53,7 +53,7 @@ export function TagInput({ value, onChange, suggestions }: Props) {
                 styles.chip,
                 {
                   borderRadius: radii.pill,
-                  backgroundColor: withAlpha(palette.accent, 0.14),
+                  backgroundColor: palette.accentSoft,
                   borderColor: withAlpha(palette.accent, 0.4),
                 },
               ]}

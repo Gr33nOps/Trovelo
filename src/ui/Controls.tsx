@@ -7,6 +7,7 @@ import {
   HIT_SLOP,
   MIN_TOUCH,
   radius as radii,
+  solidTint,
   spacing,
   withAlpha,
 } from '../constants/theme';
@@ -51,7 +52,7 @@ export function Chip({ label, active = false, onPress, color, icon, count, acces
         {
           borderRadius: radii.sm,
           borderColor: active ? withAlpha(fill, 0.5) : palette.edge,
-          backgroundColor: active ? withAlpha(fill, 0.12) : 'transparent',
+          backgroundColor: active ? solidTint(fill, palette, 'soft') : 'transparent',
           opacity: pressed ? 0.7 : 1,
         },
       ]}
@@ -204,7 +205,7 @@ export function Badge({ label, color, icon }: { readonly label: string; readonly
         styles.badge,
         {
           borderRadius: radii.pill,
-          backgroundColor: withAlpha(color, palette.mood === 'dark' ? 0.22 : 0.16),
+          backgroundColor: solidTint(color, palette, 'strong'),
           borderColor: withAlpha(color, 0.45),
         },
       ]}

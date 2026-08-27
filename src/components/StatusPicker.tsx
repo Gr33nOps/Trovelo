@@ -33,13 +33,13 @@ interface ToneSkin {
  */
 function skinForTone(tone: StatusTone, palette: Palette, active: boolean): ToneSkin {
   if (active) {
-    return { fill: withAlpha(palette.accent, 0.16), border: withAlpha(palette.accent, 0.5), ink: palette.accent, bold: true };
+    return { fill: palette.accentSoftStrong, border: withAlpha(palette.accent, 0.5), ink: palette.accent, bold: true };
   }
   switch (tone) {
     case 'strong':
-      return { fill: withAlpha(palette.ink, 0.08), border: withAlpha(palette.ink, 0.22), ink: palette.ink, bold: true };
+      return { fill: palette.well, border: withAlpha(palette.ink, 0.22), ink: palette.ink, bold: true };
     case 'accent':
-      return { fill: withAlpha(palette.accent, 0.08), border: withAlpha(palette.accent, 0.35), ink: palette.accent, bold: false };
+      return { fill: palette.accentSoft, border: withAlpha(palette.accent, 0.35), ink: palette.accent, bold: false };
     case 'muted':
       return { fill: 'transparent', border: 'transparent', ink: palette.inkFaint, bold: false };
     case 'neutral':
