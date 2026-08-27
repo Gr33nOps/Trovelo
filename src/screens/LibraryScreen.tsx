@@ -22,7 +22,7 @@ import { Backdrop, Rule, Well } from '../ui/Surface';
 import { Type } from '../ui/Type';
 import { searchEntries } from '../utils/search';
 import { displayTag } from '../utils/tags';
-import { todayKey } from '../utils/date';
+import { formatDate, isOnThisDay, todayKey, yearsAgo } from '../utils/date';
 
 type Props = MainTabScreenProps<'Library'>;
 
@@ -208,10 +208,90 @@ function LibraryHeader({
           ) : null}
         </>
       ) : null}
+    </View>
+  );
+}
 
-      {/* Bounds the list area with a rule so even a single row reads as
-          part of a list, not text floating on the page. */}
-      <Rule />
+function RemindersSection({
+  reminders,
+  palette,
+  onOpen,
+  onDismiss,
+}: {
+  readonly reminders: Entry[];
+  readonly palette: Palette;
+  readonly onOpen: (entry: Entry) => void;
+  readonly onDismiss: (entry: Entry) => void;
+}) {
+  return (
+    <View style={styles.section}>
+      <Type role="label">Reminders</Type>
+      {reminders.map((entry, i) => (
+        <View key={entry.id}>
+          {i > 0 ? <Rule /> : null}
+          <View style={styles.lineRow}>
+            <Ionicons name="notifications-outline" size={18} color={palette.inkSoft} />
+            <Pressable
+              onPress={() => onOpen(entry)}
+              style={styles.flex}
+              accessibilityRole="button"
+              accessibilityLabel={`Open ${entry.title ?? entry.text.slice(0, 60)}`}
+            >
+              <Type role="bodyStrong" numberOfLines={1}>
+                {entry.title ?? entry.text}
+              </Type>
+              <Type role="caption" color={palette.inkFaint} numberOfLines={1}>
+                Reminder
+              </Type>
+            </Pressable>
+            <IconButton icon="close" label="Dismiss reminder" size={16} onPress={() => onDismiss(entry)} />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function OnThisDaySection({
+  items,
+  now,
+  palette,
+  onOpen,
+  onDismiss,
+}: {
+  readonly items: Entry[];
+  readonly now: number;
+  readonly palette: Palette;
+  readonly onOpen: (entry: Entry) => void;
+  readonly onDismiss: () => void;
+}) {
+  return (
+    <View style={styles.section}>
+      <View style={styles.sectionHead}>
+        <Type role="label">On this day</Type>
+        <IconButton icon="close" label="Dismiss" size={16} onPress={onDismiss} />
+      </View>
+      {items.map((entry, i) => {
+        const years = yearsAgo(entry.createdAt, new Date(now));
+        return (
+          <View key={entry.id}>
+            {i > 0 ? <Rule /> : null}
+            <Pressable
+              onPress={() => onOpen(entry)}
+              style={({ pressed }) => [styles.line, { opacity: pressed ? 0.55 : 1 }]}
+              accessibilityRole="button"
+              accessibilityLabel={`Open ${entry.title ?? entry.text.slice(0, 60)}`}
+            >
+              <Type role="bodyStrong" numberOfLines={1}>
+                {entry.title ?? entry.text}
+              </Type>
+              <Type role="caption" color={palette.inkFaint}>
+                {years === 1 ? 'A year ago' : `${years} years ago`} · {formatDate(entry.createdAt)}
+              </Type>
+            </Pressable>
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -272,18 +352,25 @@ export default function LibraryScreen({ navigation, route }: Props) {
   const [showFilters, setShowFilters] = useState(false);
   const [actionEntry, setActionEntry] = useState<Entry | null>(null);
   const [dayVersion, setDayVersion] = useState(todayKey);
+  const [now, setNow] = useState(Date.now());
+  const [memoryDismissed, setMemoryDismissed] = useState(false);
 
   useEffect(() => {
-    const refreshDay = () => setDayVersion(todayKey());
-    const timer = setInterval(refreshDay, 60_000);
+    const refresh = () => {
+      setDayVersion(todayKey());
+      setNow(Date.now());
+    };
+    const timer = setInterval(refresh, 60_000);
     const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') refreshDay();
+      if (state === 'active') refresh();
     });
     return () => {
       clearInterval(timer);
       subscription.remove();
     };
   }, []);
+
+  useEffect(() => setMemoryDismissed(false), [dayVersion]);
 
   useEffect(() => {
     if (route.params?.tag) setTagFilter(route.params.tag);
@@ -295,6 +382,20 @@ export default function LibraryScreen({ navigation, route }: Props) {
   );
 
   const keptCount = useMemo(() => entries.filter((e) => !e.archivedAt).length, [entries]);
+
+  const reminders = useMemo(
+    () =>
+      entries
+        .filter((entry) => !entry.archivedAt && entry.remindAt !== undefined && entry.remindAt <= now)
+        .sort((a, b) => (a.remindAt ?? 0) - (b.remindAt ?? 0))
+        .slice(0, 4),
+    [entries, now],
+  );
+
+  const onThisDay = useMemo(
+    () => entries.filter((entry) => !entry.archivedAt && isOnThisDay(entry.createdAt, new Date(now))).slice(0, 2),
+    [entries, now],
+  );
 
   const filtered = useMemo(() => {
     const matches = entries.filter((entry) => {
@@ -360,34 +461,62 @@ export default function LibraryScreen({ navigation, route }: Props) {
     (statusFilter !== 'all' ? 1 : 0) + (categoryFilter ? 1 : 0) + (tagFilter ? 1 : 0) + (showArchived ? 1 : 0);
 
   const header = (
-    <LibraryHeader
-      palette={palette}
-      insetsTop={insets.top}
-      keptCount={keptCount}
-      totalCount={entries.length}
-      query={query}
-      onChangeQuery={setQuery}
-      showFilters={showFilters}
-      onToggleFilters={() => setShowFilters((v) => !v)}
-      activeExtra={activeExtra}
-      filteredCount={filtered.length}
-      hasQuery={Boolean(debouncedQuery.trim())}
-      sort={sort}
-      onCycleSort={() => {
-        haptics.light();
-        setSort((s) => SORT_ORDER[(SORT_ORDER.indexOf(s) + 1) % SORT_ORDER.length]);
-      }}
-      showArchived={showArchived}
-      onToggleArchived={() => setShowArchived((v) => !v)}
-      statusFilter={statusFilter}
-      onChangeStatusFilter={setStatusFilter}
-      categories={categories}
-      categoryFilter={categoryFilter}
-      onChangeCategoryFilter={setCategoryFilter}
-      allTags={allTags}
-      tagFilter={tagFilter}
-      onChangeTagFilter={setTagFilter}
-    />
+    <>
+      <LibraryHeader
+        palette={palette}
+        insetsTop={insets.top}
+        keptCount={keptCount}
+        totalCount={entries.length}
+        query={query}
+        onChangeQuery={setQuery}
+        showFilters={showFilters}
+        onToggleFilters={() => setShowFilters((v) => !v)}
+        activeExtra={activeExtra}
+        filteredCount={filtered.length}
+        hasQuery={Boolean(debouncedQuery.trim())}
+        sort={sort}
+        onCycleSort={() => {
+          haptics.light();
+          setSort((s) => SORT_ORDER[(SORT_ORDER.indexOf(s) + 1) % SORT_ORDER.length]);
+        }}
+        showArchived={showArchived}
+        onToggleArchived={() => setShowArchived((v) => !v)}
+        statusFilter={statusFilter}
+        onChangeStatusFilter={setStatusFilter}
+        categories={categories}
+        categoryFilter={categoryFilter}
+        onChangeCategoryFilter={setCategoryFilter}
+        allTags={allTags}
+        tagFilter={tagFilter}
+        onChangeTagFilter={setTagFilter}
+      />
+
+      {reminders.length > 0 ? (
+        <RemindersSection
+          reminders={reminders}
+          palette={palette}
+          onOpen={(entry) => {
+            updateEntry(entry.id, { remindAt: null });
+            navigation.navigate('EntryDetail', { entryId: entry.id });
+          }}
+          onDismiss={(entry) => updateEntry(entry.id, { remindAt: null })}
+        />
+      ) : null}
+
+      {onThisDay.length > 0 && !memoryDismissed ? (
+        <OnThisDaySection
+          items={onThisDay}
+          now={now}
+          palette={palette}
+          onOpen={(entry) => navigation.navigate('EntryDetail', { entryId: entry.id })}
+          onDismiss={() => setMemoryDismissed(true)}
+        />
+      ) : null}
+
+      {/* Bounds the list area with a rule so even a single row reads as
+          part of a list, not text floating on the page. */}
+      <Rule />
+    </>
   );
 
   let listEmptyComponent: React.ReactNode = null;
@@ -516,5 +645,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
+  },
+  section: {
+    gap: spacing.sm,
+    paddingTop: spacing.lg,
+  },
+  sectionHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  line: {
+    paddingVertical: spacing.sm,
+    gap: 2,
+  },
+  lineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  flex: {
+    flex: 1,
   },
 });

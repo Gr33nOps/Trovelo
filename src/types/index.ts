@@ -38,7 +38,7 @@ export interface Entry {
   tags: string[];
   /** Id of the category (folder) this idea belongs to, if any. */
   categoryId?: string;
-  /** How many times this entry has been surfaced by "Surprise Me". */
+  /** How many times this entry has been surfaced again, e.g. via Weekly review. */
   timesRediscovered: number;
   /** Epoch ms of the last time the entry was surfaced. */
   lastViewedAt?: number;

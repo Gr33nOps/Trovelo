@@ -9,7 +9,6 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { fonts, fontSizes, radius as radii, spacing, weights } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { useHaptics } from '../hooks/useHaptics';
-import HomeScreen from '../screens/HomeScreen';
 import LibraryScreen from '../screens/LibraryScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import StatsScreen from '../screens/StatsScreen';
@@ -18,7 +17,6 @@ import type { RootStackParamList } from './index';
 
 export type MainTabParamList = {
   Library: { tag?: string } | undefined;
-  Home: undefined;
   Stats: undefined;
   Settings: undefined;
 };
@@ -28,16 +26,15 @@ const Tab = createBottomTabNavigator<MainTabParamList>();
 const FAB_SIZE = 52;
 
 interface TabDef {
-  readonly name: 'Library' | 'Home' | 'Settings';
+  readonly name: 'Library' | 'Settings';
   readonly label: string;
   readonly focusedIcon: keyof typeof Ionicons.glyphMap;
   readonly unfocusedIcon: keyof typeof Ionicons.glyphMap;
 }
 
-/** The bar's three real destinations. Stats stays reachable from Settings instead of taking a fourth slot. */
+/** The bar's two real destinations. Stats stays reachable from Settings instead of taking its own slot. */
 const VISIBLE_TABS: TabDef[] = [
   { name: 'Library', label: 'Trovelo', focusedIcon: 'cube', unfocusedIcon: 'cube-outline' },
-  { name: 'Home', label: 'Surprise', focusedIcon: 'shuffle', unfocusedIcon: 'shuffle-outline' },
   { name: 'Settings', label: 'Settings', focusedIcon: 'settings', unfocusedIcon: 'settings-outline' },
 ];
 
@@ -75,15 +72,11 @@ function TabButton({
 }
 
 /**
- * A fully custom bar: the compose action is a genuine 4th flex column (same
- * width as every tab), just raised above the row on its own negative margin
- * — not an absolutely-positioned overlay spanning the bar's full width. The
- * previous version used `left: 0, right: 0`, which both centred it exactly
- * on top of the Surprise tab (3 equal columns → dead centre is the middle
- * one) and, being laid out last, intercepted taps meant for every tab
- * beneath it. A normal flex column can't do either: it only ever occupies
- * its own quarter of the bar, so it can't overlap a neighbour or steal its
- * touches.
+ * A fully custom bar: three columns — Trovelo, the compose action, Settings
+ * — each a genuine flex column of equal width. The compose action is just
+ * raised above the row on its own negative margin, not an absolutely-
+ * positioned overlay spanning the bar's full width, so it can't overlap a
+ * neighbour or steal its touches.
  */
 function TabBar({ state, navigation }: BottomTabBarProps) {
   const { palette } = useTheme();
@@ -91,7 +84,7 @@ function TabBar({ state, navigation }: BottomTabBarProps) {
   const haptics = useHaptics();
   const barHeight = 56 + Math.max(insets.bottom, spacing.sm);
   const activeName = state.routes[state.index].name;
-  const [libraryTab, homeTab, settingsTab] = VISIBLE_TABS;
+  const [libraryTab, settingsTab] = VISIBLE_TABS;
 
   const goTo = (name: TabDef['name']) => {
     haptics.light();
@@ -111,7 +104,6 @@ function TabBar({ state, navigation }: BottomTabBarProps) {
       ]}
     >
       <TabButton tab={libraryTab} focused={activeName === libraryTab.name} onPress={() => goTo(libraryTab.name)} />
-      <TabButton tab={homeTab} focused={activeName === homeTab.name} onPress={() => goTo(homeTab.name)} />
 
       <Pressable
         onPress={() => {
@@ -150,7 +142,6 @@ export function MainTabs() {
       tabBar={(props) => <TabBar {...props} />}
     >
       <Tab.Screen name="Library" component={LibraryScreen} />
-      <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Settings" component={SettingsScreen} />
       <Tab.Screen name="Stats" component={StatsScreen} />
     </Tab.Navigator>

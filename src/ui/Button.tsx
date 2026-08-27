@@ -57,9 +57,9 @@ interface Skin {
 /**
  * Accent is reserved for two things: a filled `primary` button (the one
  * action on the screen) and an `outline` button (a highlighted secondary
- * action, e.g. Surprise Me). Every other variant — including a disabled
- * button of any variant — stays neutral, so the accent colour never has to
- * compete with itself for the user's attention.
+ * action, e.g. an empty state's call to action). Every other variant —
+ * including a disabled button of any variant — stays neutral, so the accent
+ * colour never has to compete with itself for the user's attention.
  */
 function skinFor(variant: ButtonVariant, palette: Palette, disabled: boolean, tint?: string): Skin {
   if (disabled) {

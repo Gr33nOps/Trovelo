@@ -44,7 +44,7 @@ type EntriesAction =
   | { type: 'update'; id: string; patch: EntryPatch }
   | { type: 'toggleFavorite'; id: string }
   | { type: 'addFollowUp'; id: string; followUp: FollowUp }
-  /** Distinct from 'update': records a Surprise Me / Review reveal without
+  /** Distinct from 'update': records a Weekly review reveal without
    *  touching `updatedAt`, so looking at something does not read as editing it. */
   | { type: 'recordView'; id: string }
   | { type: 'delete'; id: string }

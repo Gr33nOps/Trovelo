@@ -20,7 +20,7 @@ const PAGES = [
   },
   {
     title: 'Rediscover what you saved',
-    body: 'Tap Surprise Me and something comes back when you least expect it.',
+    body: 'Reminders and on-this-day memories bring old ideas back to you, right on the box.',
   },
   {
     title: 'Fix it up in one tap',

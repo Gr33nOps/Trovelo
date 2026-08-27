@@ -4,14 +4,14 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-7a7f7c.svg)](LICENSE)
 
 A simple box for ideas. Drop in the things you'd otherwise forget — a book someone mentioned, a
-half-formed plan, a line you liked — then press **Surprise Me** and meet one of them again when
-you least expect it.
+half-formed plan, a line you liked — and let reminders and on-this-day memories bring them back
+when you least expect it.
 
 Everything stays on your phone. No account, no server, no AI, no network access of any kind.
 
 ## Features
 
-- **Surprise Me** — resurface one saved idea at a time, weighted by how long it's been neglected
+- **Reminders & on this day** — old ideas resurface on their own, right on the library screen
 - **Fix grammar & style** — a one-tap, rule-based cleanup of spacing, punctuation and capitalisation. No model, no network.
 - **Library** — ranked search with typo tolerance, filters and sorting
 - **Streaks & weekly review** — keep what matters in front of you, deliberately

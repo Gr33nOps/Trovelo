@@ -24,10 +24,9 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Review'>;
 const REVIEW_SIZE = 5;
 
 /**
- * A short, deliberate pass through the entries that have waited longest,
- * rather than the random resurfacing "Surprise Me" does. The queue is a
- * one-time snapshot taken when the screen opens, so triaging one entry never
- * reshuffles the rest mid-session.
+ * A short, deliberate pass through the entries that have waited longest. The
+ * queue is a one-time snapshot taken when the screen opens, so triaging one
+ * entry never reshuffles the rest mid-session.
  */
 export default function ReviewScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
@@ -70,7 +69,7 @@ export default function ReviewScreen({ navigation }: Props) {
     setStatus(current.id, status);
     haptics.light();
     if (status === 'not_useful') {
-      toast.show({ message: 'Kept, but it will stop turning up in surprises.' });
+      toast.show({ message: 'Kept, but it won’t come up for review again.' });
     }
   };
 

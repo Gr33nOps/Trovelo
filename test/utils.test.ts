@@ -3,7 +3,6 @@ import test from 'node:test';
 
 import type { Entry } from '../src/types';
 import { fixGrammarAndStyle } from '../src/utils/grammar';
-import { pickSurprise } from '../src/utils/random';
 import { searchEntries } from '../src/utils/search';
 import { matchKnownTags, normalizeTag, parseTags } from '../src/utils/tags';
 
@@ -30,21 +29,6 @@ test('search indexes non-ASCII words instead of treating the query as empty', ()
 
   assert.deepEqual(searchEntries(entries, 'café').map(({ id }) => id), ['latin']);
   assert.deepEqual(searchEntries(entries, 'سفر').map(({ id }) => id), ['urdu']);
-});
-
-test('dismissed and archived entries never resurface', () => {
-  const hidden = [
-    entry('dismissed', { status: 'not_useful' }),
-    entry('archived', { archivedAt: Date.now() }),
-  ];
-
-  assert.equal(pickSurprise(hidden, []), null);
-});
-
-test('surprise ignores recent entries when another eligible entry exists', () => {
-  const recent = entry('recent');
-  const available = entry('available');
-  assert.equal(pickSurprise([recent, available], ['recent'])?.id, 'available');
 });
 
 test('known-tag matching uses Unicode-aware word boundaries', () => {
