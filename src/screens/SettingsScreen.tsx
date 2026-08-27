@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Switch, View, useColorScheme } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 
@@ -11,7 +11,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useHaptics } from '../hooks/useHaptics';
 import { MainTabScreenProps } from '../navigation';
-import { appIconModuleAvailable } from '../services/appIcon';
+import { appIconModuleAvailable, setAppIcon } from '../services/appIcon';
 import { clearAllStoredData } from '../storage/storage';
 import { AccentId, ThemeMode } from '../types';
 import { Button } from '../ui/Button';
@@ -43,6 +43,7 @@ export default function SettingsScreen({ navigation }: Props) {
   const { entries, categories, addCategory, renameCategory, deleteCategory, clearAll } = useEntries();
   const haptics = useHaptics();
   const toast = useToast();
+  const systemScheme = useColorScheme();
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
@@ -50,26 +51,40 @@ export default function SettingsScreen({ navigation }: Props) {
   const [createFolderOpen, setCreateFolderOpen] = useState(false);
 
   /**
-   * The home-screen icon only actually updates on the next cold start (see
-   * ThemeContext) — applying it immediately can make Android kill the app
-   * mid-session, which reads as a crash. Tell the user instead of surprising
-   * them with it.
+   * Switching the home-screen icon can make Android kill the app's process
+   * mid-session — even with DONT_KILL_APP set — which reads as a crash, and
+   * trying to "sync on next launch" instead just moved that same kill to
+   * every cold start, closing the app right after the user reopened it. The
+   * only way to keep this from being a surprise is to never call it on our
+   * own: this only fires from the button below, a click the user chose to
+   * make, so the app closing right after is expected, not alarming.
    */
-  const noteIconWillUpdateOnRestart = () => {
-    if (appIconMode === 'auto' && appIconModuleAvailable) {
-      toast.show({ message: 'Restart Trovelo to update the home screen icon to match.' });
-    }
+  const offerIconRestart = (nextAccentId: AccentId, nextIsDark: boolean) => {
+    if (appIconMode !== 'auto' || !appIconModuleAvailable) return;
+    toast.show({
+      message: 'Restart to update the home screen icon to match.',
+      duration: 8000,
+      action: {
+        label: 'Restart',
+        onPress: () => {
+          void setAppIcon(nextAccentId, nextIsDark).catch((error) => {
+            if (__DEV__) console.warn('[settings] failed to sync app icon', error);
+          });
+        },
+      },
+    });
   };
 
   const handleModeChange = (nextMode: ThemeMode) => {
     setMode(nextMode);
-    noteIconWillUpdateOnRestart();
+    const nextIsDark = nextMode === 'system' ? systemScheme === 'dark' : nextMode === 'dark';
+    offerIconRestart(accentId, nextIsDark);
   };
 
   const handleAccentChange = (nextAccentId: AccentId) => {
     haptics.light();
     setAccentId(nextAccentId);
-    noteIconWillUpdateOnRestart();
+    offerIconRestart(nextAccentId, isDark);
   };
 
   const handleRename = () => {
